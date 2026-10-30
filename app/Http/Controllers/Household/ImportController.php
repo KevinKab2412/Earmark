@@ -142,14 +142,12 @@ class ImportController extends Controller
             'duplicate_reason' => $row->duplicate_reason,
             'is_split' => $row->is_split,
             'final_category_id' => $row->final_category_id,
-            'final_bucket_id' => $row->final_bucket_id,
             'transfer_pair_id' => $row->transfer_pair_id,
             'transfer_match_staged_transaction_id' => $row->transfer_match_staged_transaction_id,
             'transfer_match_transaction_id' => $row->transfer_match_transaction_id,
             'transfer_matches' => $transferMatches[$row->id] ?? [],
             'splits' => $row->splits->map(fn ($split): array => [
                 'category_id' => $split->category_id,
-                'bucket_id' => $split->bucket_id,
                 'amount' => $split->amount,
                 'memo' => $split->memo,
             ])->values(),
@@ -165,7 +163,7 @@ class ImportController extends Controller
             ],
             'rows' => $rows,
             'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'buckets' => $household->buckets()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

@@ -23,7 +23,7 @@ class UpdateStatementReview
     public function __construct(private TransferMatchSuggestionService $transferMatches) {}
 
     /**
-     * @param  list<array{id: string, date: string, payee: string, amount: int, final_category_id: ?string, final_bucket_id: ?string, accept: bool, status: string, splits?: list<array{category_id: ?string, bucket_id: string, amount: int, memo: ?string}>, transfer_match_type?: ?string, transfer_match_id?: ?string}>  $rows
+     * @param  list<array{id: string, date: string, payee: string, amount: int, final_category_id: ?string, accept: bool, status: string, splits?: list<array{category_id: ?string, amount: int, memo: ?string}>, transfer_match_type?: ?string, transfer_match_id?: ?string}>  $rows
      */
     public function handle(StatementUpload $upload, array $rows): void
     {
@@ -43,7 +43,6 @@ class UpdateStatementReview
                     'payee' => $data['payee'],
                     'amount' => $data['amount'],
                     'final_category_id' => $isSplit ? null : ($data['final_category_id'] ?? null),
-                    'final_bucket_id' => $isSplit ? null : ($data['final_bucket_id'] ?? null),
                     'accept' => $data['accept'],
                     'status' => $data['status'],
                     'is_split' => $isSplit,
@@ -65,7 +64,6 @@ class UpdateStatementReview
                 foreach ($splits as $split) {
                     $staged->splits()->create([
                         'category_id' => $split['category_id'] ?? null,
-                        'bucket_id' => $split['bucket_id'],
                         'amount' => $split['amount'],
                         'memo' => $split['memo'] ?? null,
                     ]);

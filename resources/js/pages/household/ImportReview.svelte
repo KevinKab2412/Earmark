@@ -32,25 +32,10 @@
     import InputError from '@/components/InputError.svelte';
     import { formatCents } from '@/lib/importCsv';
 
-    const CATEGORY_TYPES = [
-        'income',
-        'housing',
-        'transportation',
-        'food',
-        'household',
-        'personal',
-        'health',
-        'debt',
-        'savings',
-        'fees',
-        'other',
-    ] as const;
-
     type Option = { id: string; name: string };
 
     type ServerSplit = {
         category_id: string | null;
-        bucket_id: string;
         amount: number;
         memo: string | null;
     };
@@ -78,7 +63,6 @@
         duplicate_reason: string | null;
         is_split: boolean;
         final_category_id: string | null;
-        final_bucket_id: string | null;
         transfer_pair_id: string | null;
         transfer_match_staged_transaction_id: string | null;
         transfer_match_transaction_id: string | null;
@@ -86,7 +70,7 @@
         splits: ServerSplit[];
     };
 
-    type EditSplit = { bucket_id: string; category_id: string; amount: number; memo: string };
+    type EditSplit = { category_id: string; amount: number; memo: string };
 
     type EditRow = {
         id: string;
@@ -100,7 +84,6 @@
         isPossibleDuplicate: boolean;
         duplicateReason: string | null;
         categoryId: string;
-        bucketId: string;
         isSplit: boolean;
         splits: EditSplit[];
         transferMatches: TransferMatch[];
@@ -113,7 +96,7 @@
         upload,
         rows,
         categories,
-        buckets,
+        categoryGroups,
     }: {
         upload: {
             id: string;
@@ -124,7 +107,7 @@
         };
         rows: ServerRow[];
         categories: Option[];
-        buckets: Option[];
+        categoryGroups: Option[];
     } = $props();
 
     const selectClass =
@@ -143,10 +126,8 @@
             isPossibleDuplicate: row.is_possible_duplicate,
             duplicateReason: row.duplicate_reason,
             categoryId: row.final_category_id ?? '',
-            bucketId: row.final_bucket_id ?? '',
             isSplit: row.is_split,
             splits: row.splits.map((split) => ({
-                bucket_id: split.bucket_id,
                 category_id: split.category_id ?? '',
                 amount: split.amount,
                 memo: split.memo ?? '',
@@ -217,7 +198,7 @@
         row.isSplit = !row.isSplit;
 
         if (row.isSplit && row.splits.length === 0) {
-            row.splits = [{ bucket_id: '', category_id: '', amount: row.amount, memo: '' }];
+            row.splits = [{ category_id: '', amount: row.amount, memo: '' }];
         }
 
         if (!row.isSplit) {
@@ -226,7 +207,7 @@
     }
 
     function addSplit(row: EditRow): void {
-        row.splits = [...row.splits, { bucket_id: '', category_id: '', amount: 0, memo: '' }];
+        row.splits = [...row.splits, { category_id: '', amount: 0, memo: '' }];
     }
 
     function removeSplit(row: EditRow, index: number): void {
@@ -283,14 +264,12 @@
             payee: row.payee,
             amount: Number(row.amount),
             final_category_id: row.isSplit ? null : row.categoryId || null,
-            final_bucket_id: row.isSplit ? null : row.bucketId || null,
             accept: row.accept,
             status: row.status,
             transfer_match_type: row.transferMatchId ? row.transferMatchType : null,
             transfer_match_id: row.transferMatchId || null,
             splits: row.isSplit
                 ? row.splits.map((split) => ({
-                      bucket_id: split.bucket_id,
                       category_id: split.category_id || null,
                       amount: Number(split.amount),
                       memo: split.memo || null,
@@ -326,13 +305,15 @@
 
     let showCategoryModal = $state(false);
     let newCategoryName = $state('');
-    let newCategoryType = $state<(typeof CATEGORY_TYPES)[number]>('other');
+    let newCategoryDirection = $state('expense');
+    let newCategoryGroupId = $state('');
     let creatingCategory = $state(false);
     let categoryError = $state<string | null>(null);
 
     function openCategoryModal(): void {
         newCategoryName = '';
-        newCategoryType = 'other';
+        newCategoryDirection = 'expense';
+        newCategoryGroupId = categoryGroups.find((group) => group.name === 'Other')?.id ?? categoryGroups[0]?.id ?? '';
         categoryError = null;
         showCategoryModal = true;
     }
@@ -345,7 +326,11 @@
 
         router.post(
             CategoryController.store.url(),
-            { name: newCategoryName, type: newCategoryType },
+            {
+                name: newCategoryName,
+                direction: newCategoryDirection,
+                category_group_id: newCategoryGroupId,
+            },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -355,7 +340,8 @@
                 onError: (formErrors) => {
                     categoryError =
                         formErrors.name ??
-                        formErrors.type ??
+                        formErrors.direction ??
+                        formErrors.category_group_id ??
                         'Could not create the category.';
                 },
                 onFinish: () => (creatingCategory = false),
@@ -366,15 +352,12 @@
     let showRuleModal = $state(false);
     let rulePattern = $state('');
     let ruleCategoryId = $state('');
-    let ruleBucketId = $state('');
     let creatingRule = $state(false);
     let ruleError = $state<string | null>(null);
 
     function openRuleModal(row: EditRow): void {
-        // Prefill the rule from the row: match on its payee, reuse its category/bucket.
         rulePattern = row.payee;
         ruleCategoryId = row.categoryId;
-        ruleBucketId = row.bucketId;
         ruleError = null;
         showRuleModal = true;
     }
@@ -397,10 +380,6 @@
                 if (ruleCategoryId) {
                     row.categoryId = ruleCategoryId;
                 }
-
-                if (ruleBucketId) {
-                    row.bucketId = ruleBucketId;
-                }
             }
         }
     }
@@ -416,7 +395,6 @@
                 pattern: rulePattern,
                 enabled: true,
                 category_id: ruleCategoryId || null,
-                bucket_id: ruleBucketId || null,
                 rename_to: null,
                 hide_from_reports: false,
                 mark_for_review: false,
@@ -640,37 +618,11 @@
                                     {/each}
                                 </select>
                             </div>
-                            <div class="grid gap-1">
-                                <Label for={`bucket-${row.id}`}>Bucket</Label>
-                                <select
-                                    id={`bucket-${row.id}`}
-                                    class={selectClass}
-                                    bind:value={row.bucketId}
-                                >
-                                    <option value="">(none)</option>
-                                    {#each buckets as bucket (bucket.id)}
-                                        <option value={bucket.id}>{bucket.name}</option>
-                                    {/each}
-                                </select>
-                            </div>
                         </div>
                     {:else}
                         <div class="flex flex-col gap-2 rounded-lg border border-dashed p-3">
                             {#each row.splits as split, splitIndex (splitIndex)}
-                                <div class="grid items-end gap-2 md:grid-cols-[1fr_1fr_140px_auto]">
-                                    <div class="grid gap-1">
-                                        <Label for={`split-bucket-${row.id}-${splitIndex}`}>Bucket</Label>
-                                        <select
-                                            id={`split-bucket-${row.id}-${splitIndex}`}
-                                            class={selectClass}
-                                            bind:value={split.bucket_id}
-                                        >
-                                            <option value="">Select a bucket</option>
-                                            {#each buckets as bucket (bucket.id)}
-                                                <option value={bucket.id}>{bucket.name}</option>
-                                            {/each}
-                                        </select>
-                                    </div>
+                                <div class="grid items-end gap-2 md:grid-cols-[1fr_140px_auto]">
                                     <div class="grid gap-1">
                                         <Label for={`split-category-${row.id}-${splitIndex}`}>Category</Label>
                                         <select
@@ -781,15 +733,24 @@
                 />
             </div>
             <div class="grid gap-1">
-                <Label for="new-category-type">Type</Label>
+                <Label for="new-category-direction">Type</Label>
                 <select
-                    id="new-category-type"
+                    id="new-category-direction"
                     class={selectClass}
-                    bind:value={newCategoryType}
-                    data-test="new-category-type"
+                    bind:value={newCategoryDirection}
+                    data-test="new-category-direction"
                 >
-                    {#each CATEGORY_TYPES as type (type)}
-                        <option value={type}>{type}</option>
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="adjustment">Balance adjustment</option>
+                </select>
+            </div>
+            <div class="grid gap-1">
+                <Label for="new-category-group">Group</Label>
+                <select id="new-category-group" class={selectClass} bind:value={newCategoryGroupId}>
+                    {#each categoryGroups as group (group.id)}
+                        <option value={group.id}>{group.name}</option>
                     {/each}
                 </select>
             </div>
@@ -820,8 +781,7 @@
     <DialogContent>
         <DialogTitle>Create a payee rule</DialogTitle>
         <p class="mt-1 text-sm text-muted-foreground">
-            Any transaction whose payee contains this text gets the category and
-            bucket below, on this and future imports.
+            Any transaction whose payee contains this text gets the category below, on this and future imports.
         </p>
         <div class="mt-4 flex flex-col gap-4">
             <div class="grid gap-1">
@@ -839,15 +799,6 @@
                     <option value="">(none)</option>
                     {#each categories as category (category.id)}
                         <option value={category.id}>{category.name}</option>
-                    {/each}
-                </select>
-            </div>
-            <div class="grid gap-1">
-                <Label for="rule-bucket">Bucket</Label>
-                <select id="rule-bucket" class={selectClass} bind:value={ruleBucketId}>
-                    <option value="">(none)</option>
-                    {#each buckets as bucket (bucket.id)}
-                        <option value={bucket.id}>{bucket.name}</option>
                     {/each}
                 </select>
             </div>

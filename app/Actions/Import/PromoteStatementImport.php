@@ -108,7 +108,6 @@ class PromoteStatementImport
                 TransactionSplit::query()->create([
                     'transaction_id' => $transaction->id,
                     'category_id' => $split->category_id,
-                    'bucket_id' => $split->bucket_id,
                     'amount' => $split->amount,
                     'memo' => $split->memo,
                 ]);
@@ -119,7 +118,6 @@ class PromoteStatementImport
                 'account_id' => $upload->account_id,
                 'payee' => $row->payee,
                 'category_id' => $row->final_category_id,
-                'bucket_id' => $row->final_bucket_id,
                 'amount' => $row->amount,
                 'transfer_pair_id' => $row->transfer_pair_id,
                 'source' => $source,

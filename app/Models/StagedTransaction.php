@@ -23,9 +23,7 @@ class StagedTransaction extends Model
         'external_id',
         'amount',
         'suggested_category_id',
-        'suggested_bucket_id',
         'final_category_id',
-        'final_bucket_id',
         'accept',
         'status',
         'is_possible_duplicate',
@@ -77,27 +75,11 @@ class StagedTransaction extends Model
     }
 
     /**
-     * @return BelongsTo<Bucket, $this>
-     */
-    public function suggestedBucket(): BelongsTo
-    {
-        return $this->belongsTo(Bucket::class, 'suggested_bucket_id');
-    }
-
-    /**
      * @return BelongsTo<Category, $this>
      */
     public function finalCategory(): BelongsTo
     {
         return $this->belongsTo(Category::class, 'final_category_id');
-    }
-
-    /**
-     * @return BelongsTo<Bucket, $this>
-     */
-    public function finalBucket(): BelongsTo
-    {
-        return $this->belongsTo(Bucket::class, 'final_bucket_id');
     }
 
     /**

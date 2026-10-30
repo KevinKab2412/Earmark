@@ -24,7 +24,7 @@ class CategoryGroupSeeder extends Seeder
         'health' => ['name' => 'Health & Wellness', 'sort_order' => 50, 'direction' => 'expense', 'categories' => ['Medical', 'Prescriptions', 'Fitness'], 'rollover' => false],
         'debt' => ['name' => 'Debt', 'sort_order' => 60, 'direction' => 'expense', 'categories' => ['Loan Payments'], 'rollover' => false],
         'savings' => ['name' => 'Savings Goals', 'sort_order' => 70, 'direction' => 'expense', 'categories' => ['Emergency Fund', 'Vacation', 'Home Down Payment'], 'rollover' => true],
-        'bills' => ['name' => 'Bills & Utilities', 'sort_order' => 80, 'direction' => 'expense', 'categories' => ['Electricity', 'Internet', 'Phone'], 'rollover' => false],
+        'bills' => ['name' => 'Bills', 'sort_order' => 80, 'direction' => 'expense', 'categories' => ['Electricity', 'Internet', 'Phone'], 'rollover' => false],
         'other' => ['name' => 'Other', 'sort_order' => 100, 'direction' => 'expense', 'categories' => [], 'rollover' => false],
         'transfers' => ['name' => 'Transfers', 'sort_order' => 110, 'direction' => 'transfer', 'categories' => ['Transfer', 'Credit Card Payment', 'Balance Adjustments'], 'category_directions' => ['Balance Adjustments' => 'adjustment'], 'category_icons' => ['Transfer' => '🔁', 'Credit Card Payment' => '💳', 'Balance Adjustments' => '⚖️'], 'rollover' => false],
     ];

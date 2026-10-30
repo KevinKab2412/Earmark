@@ -20,7 +20,6 @@ class Transaction extends Model
         'account_id',
         'payee',
         'category_id',
-        'bucket_id',
         'amount',
         'memo',
         'is_split',
@@ -101,14 +100,6 @@ class Transaction extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
-    }
-
-    /**
-     * @return BelongsTo<Bucket, $this>
-     */
-    public function bucket(): BelongsTo
-    {
-        return $this->belongsTo(Bucket::class);
     }
 
     /**
