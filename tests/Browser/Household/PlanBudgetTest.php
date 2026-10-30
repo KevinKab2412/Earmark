@@ -4,7 +4,7 @@ use App\Models\Account;
 use App\Models\CategoryBudgetMove;
 use App\Models\Transaction;
 
-it('prefills move budget from a category balance and saves the move', function () {
+it('opens move budget with empty endpoints and saves the chosen amount', function () {
     $user = actingAsOwner();
     $household = $user->household();
     $from = $household->categories()->where('name', 'Groceries')->firstOrFail();
@@ -24,15 +24,16 @@ it('prefills move budget from a category balance and saves the move', function (
     ]);
 
     visit('/household/plan')
-        ->click('[data-category-id="'.$to->id.'"]')
-        ->assertSee('Move Budget')
-        ->assertValue('#move-from', $from->id)
-        ->assertValue('#move-to', $to->id)
         ->click('[data-category-id="'.$from->id.'"]')
-        ->assertValue('#move-from', $from->id)
-        ->assertValue('#move-to', $to->id)
-        ->assertValue('#move-amount', '333.00')
+        ->assertSee('Move Budget')
+        ->assertValue('#move-from', '')
+        ->assertValue('#move-to', '')
+        ->assertValue('#move-amount', '0')
+        ->assertDisabled('@submit-move-money')
+        ->select('#move-from', $from->id)
+        ->select('#move-to', $to->id)
         ->fill('#move-amount', '50.00')
+        ->assertEnabled('@submit-move-money')
         ->click('@submit-move-money')
         ->assertSee('Funds moved between categories.')
         ->assertNoJavaScriptErrors();

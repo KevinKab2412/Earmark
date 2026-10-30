@@ -80,6 +80,10 @@ class PlanController extends Controller
 
         $categories = $planGroups->flatMap(fn (array $group): array => $group['categories'])->values();
         $budgetCategories = $categories->where('budgetable', true)->values();
+        $income = $categories->where('direction', 'income')->values();
+        $expenses = $categories->where('direction', 'expense')->values();
+        $incomePlanned = (int) $income->sum('planned_cents');
+        $expensePlanned = (int) $expenses->sum('planned_cents');
         $previous = $cursor->subMonth();
         $next = $cursor->addMonth();
 
@@ -96,6 +100,22 @@ class PlanController extends Controller
                 'activity' => Money::format($categories->sum('activity_cents')),
                 'available' => Money::format($categories->sum('available_cents')),
             ],
+            'budgetSummary' => [
+                'left_to_budget' => Money::format($incomePlanned - $expensePlanned),
+                'left_to_budget_cents' => $incomePlanned - $expensePlanned,
+                'income' => [
+                    'planned' => Money::format($incomePlanned),
+                    'planned_cents' => $incomePlanned,
+                    'actual' => Money::format((int) $income->sum('activity_cents')),
+                    'actual_cents' => (int) $income->sum('activity_cents'),
+                ],
+                'expenses' => [
+                    'planned' => Money::format($expensePlanned),
+                    'planned_cents' => $expensePlanned,
+                    'actual' => Money::format((int) $expenses->sum('activity_cents')),
+                    'actual_cents' => (int) $expenses->sum('activity_cents'),
+                ],
+            ],
             'previous' => ['year' => $previous->year, 'month' => $previous->month],
             'next' => ['year' => $next->year, 'month' => $next->month],
             'groupsForSelect' => $household->categoryGroups()
@@ -105,6 +125,54 @@ class PlanController extends Controller
                 ->get(['id', 'name']),
             'defaults' => ['apply_to_future_months' => true],
         ]);
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $household = $this->household($request);
+        $cursor = $this->cursor($request);
+        $groups = $household->categoryGroups()
+            ->where('archived', false)
+            ->with(['categories' => function ($query): void {
+                $query->where('archived', false)->orderBy('sort_order')->orderBy('name');
+            }])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        $filename = sprintf('plan-%04d-%02d.csv', $cursor->year, $cursor->month);
+
+        return response()->streamDownload(function () use ($groups, $cursor): void {
+            $handle = fopen('php://output', 'w');
+
+            if ($handle === false) {
+                return;
+            }
+
+            fputcsv($handle, ['Section', 'Group', 'Category', 'Planned', 'Actual', 'Remaining']);
+
+            foreach ($groups as $group) {
+                foreach ($group->categories as $category) {
+                    $summary = $this->budget->summaryForMonth($category, $cursor->year, $cursor->month);
+                    $budgetable = in_array($category->direction, ['income', 'expense'], true);
+                    $section = match ($category->direction) {
+                        'income' => 'Income',
+                        'expense' => 'Expenses',
+                        default => 'Transfers',
+                    };
+
+                    fputcsv($handle, [
+                        $section,
+                        $group->name,
+                        $category->name,
+                        Money::format($summary['planned_amount']),
+                        Money::format($summary['activity']),
+                        $budgetable ? Money::format($summary['available']) : '',
+                    ]);
+                }
+            }
+
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function storeCategory(StoreCategoryRequest $request, CreateCategory $action): RedirectResponse

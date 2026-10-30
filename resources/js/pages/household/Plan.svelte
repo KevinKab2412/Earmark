@@ -23,6 +23,7 @@
     import { Label } from '@/components/ui/label';
     import { toUrl } from '@/lib/utils';
     import { index as planIndex } from '@/routes/household/plan';
+    import { exportMethod as planExport } from '@/routes/household/plan';
 
     type Category = {
         id: string;
@@ -59,7 +60,7 @@
         groups,
         categories,
         budgetCategories,
-        totals,
+        budgetSummary,
         previous,
         next,
         groupsForSelect,
@@ -71,7 +72,12 @@
         groups: Group[];
         categories: Category[];
         budgetCategories: Category[];
-        totals: { planned: string; planned_cents: number; activity: string; available: string };
+        budgetSummary: {
+            left_to_budget: string;
+            left_to_budget_cents: number;
+            income: { planned: string; planned_cents: number; actual: string; actual_cents: number };
+            expenses: { planned: string; planned_cents: number; actual: string; actual_cents: number };
+        };
         previous: { year: number; month: number };
         next: { year: number; month: number };
         groupsForSelect: { id: string; name: string }[];
@@ -89,6 +95,8 @@
     let budgetErrors = $state<Record<string, string>>({});
     let collapsedGroups = $state<string[]>([]);
     let collapsedSections = $state<string[]>([]);
+    let shownUnbudgeted = $state<string[]>([]);
+    let summaryTab = $state<'summary' | 'income' | 'expenses'>('summary');
 
     type BudgetSection = {
         key: 'income' | 'expense' | 'transfer';
@@ -115,9 +123,15 @@
     });
 
     const pace = $derived(paceMarkerPercent());
+    const moveReady = $derived(
+        moveForm.from_category_id !== '' &&
+            moveForm.to_category_id !== '' &&
+            moveForm.from_category_id !== moveForm.to_category_id &&
+            Number(moveForm.amount) > 0,
+    );
 
     let moveOpen = $state(false);
-    let moveForm = $state({ from_category_id: '', to_category_id: '', amount: '', memo: '' });
+    let moveForm = $state({ from_category_id: '', to_category_id: '', amount: '0', memo: '' });
     let moveErrors = $state<Record<string, string>>({});
     let movePanel = $state({ top: 96, left: 96 });
 
@@ -171,7 +185,7 @@
                 preserveScroll: true,
                 onSuccess: () => {
                     moveOpen = false;
-                    moveForm = { from_category_id: '', to_category_id: '', amount: '', memo: '' };
+                    moveForm = { from_category_id: '', to_category_id: '', amount: '0', memo: '' };
                 },
                 onError: (errors) => (moveErrors = errors as Record<string, string>),
             },
@@ -233,6 +247,16 @@
         collapsedSections = collapsedSections.includes(key)
             ? collapsedSections.filter((id) => id !== key)
             : [...collapsedSections, key];
+    }
+
+    function isUnbudgeted(category: Category): boolean {
+        return category.budgetable && category.planned_cents === 0;
+    }
+
+    function toggleUnbudgeted(groupId: string): void {
+        shownUnbudgeted = shownUnbudgeted.includes(groupId)
+            ? shownUnbudgeted.filter((id) => id !== groupId)
+            : [...shownUnbudgeted, groupId];
     }
 
     function sectionKey(group: Group): BudgetSection['key'] {
@@ -299,10 +323,6 @@
         return 'ok';
     }
 
-    function dollars(cents: number): string {
-        return (Math.abs(cents) / 100).toFixed(2);
-    }
-
     function balanceClass(categoryId: string): string {
         const selected = budgetCategories.find((category) => category.id === categoryId);
 
@@ -313,45 +333,17 @@
         return selected.available_cents < 0 ? 'text-red-600' : 'text-emerald-700';
     }
 
-    function openMove(category: Category, event: MouseEvent): void {
+    function openMove(event: MouseEvent): void {
         editingCategoryId = null;
 
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
         const panelWidth = 320;
-        const panelHeight = 360;
+        const panelHeight = 420;
         const left = Math.min(Math.max(8, rect.right - panelWidth), window.innerWidth - panelWidth - 8);
         const below = rect.bottom + 8;
         const top = below + panelHeight > window.innerHeight ? Math.max(8, rect.top - panelHeight - 8) : below;
         movePanel = { top, left };
-
-        const others = budgetCategories.filter((candidate) => candidate.id !== category.id);
-        const overdrawn = others
-            .filter((candidate) => candidate.available_cents < 0)
-            .sort((leftCategory, rightCategory) => leftCategory.available_cents - rightCategory.available_cents)[0];
-        const funded = others
-            .filter((candidate) => candidate.available_cents > 0)
-            .sort((leftCategory, rightCategory) => rightCategory.available_cents - leftCategory.available_cents)[0];
-
-        if (category.available_cents < 0) {
-            const amountCents = funded
-                ? Math.min(funded.available_cents, Math.abs(category.available_cents))
-                : Math.abs(category.available_cents);
-
-            moveForm = {
-                from_category_id: funded?.id ?? '',
-                to_category_id: category.id,
-                amount: dollars(amountCents),
-                memo: '',
-            };
-        } else {
-            moveForm = {
-                from_category_id: category.id,
-                to_category_id: overdrawn?.id ?? '',
-                amount: category.available_cents > 0 ? dollars(category.available_cents) : '',
-                memo: '',
-            };
-        }
-
+        moveForm = { from_category_id: '', to_category_id: '', amount: '0', memo: '' };
         moveErrors = {};
         moveOpen = true;
     }
@@ -398,25 +390,11 @@
                 {/snippet}
             </Button>
             <Button type="button" variant="outline" onclick={() => (groupOpen = true)}>Add group</Button>
-            <Button type="button" onclick={openCategoryDialog}>Add category</Button>
+            <Button type="button" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={openCategoryDialog}>Add category</Button>
         </div>
     </div>
 
-    <section class="grid gap-3 sm:grid-cols-3" aria-label="Monthly budget summary">
-        <div class="rounded-2xl border bg-card p-4">
-            <p class="text-sm text-muted-foreground">Planned</p>
-            <p class="mt-1 text-2xl font-semibold tabular-nums">{totals.planned}</p>
-        </div>
-        <div class="rounded-2xl border bg-card p-4">
-            <p class="text-sm text-muted-foreground">Activity</p>
-            <p class="mt-1 text-2xl font-semibold tabular-nums">{totals.activity}</p>
-        </div>
-        <div class="rounded-2xl border bg-card p-4">
-            <p class="text-sm text-muted-foreground">Available</p>
-            <p class="mt-1 text-2xl font-semibold tabular-nums">{totals.available}</p>
-        </div>
-    </section>
-
+    <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
     <div class="rounded-2xl border bg-card">
         {#if groups.length === 0}
             <div class="p-10 text-center">
@@ -432,10 +410,15 @@
                             <span class="text-muted-foreground">{collapsedSections.includes(section.key) ? '▸' : '▾'}</span>
                             <span class="truncate">{section.label}</span>
                         </button>
-                        <span class="text-center text-xs font-normal text-muted-foreground sm:col-start-2">
-                            Progress
-                            <span class="sr-only">. The line marks today's pace through the month.</span>
-                        </span>
+                        {#if section.key !== 'transfer'}
+                            <span class="text-center text-xs font-normal text-muted-foreground">
+                                Progress
+                                <span class="sr-only">. The line marks today's pace through the month.</span>
+                            </span>
+                            <span class="text-right text-xs font-normal text-muted-foreground">Planned</span>
+                            <span class="text-right text-xs font-normal text-muted-foreground">Actual</span>
+                            <span class="text-right text-xs font-normal text-muted-foreground">Remaining</span>
+                        {/if}
                     </div>
 
                     {#if !collapsedSections.includes(section.key)}
@@ -447,19 +430,23 @@
                             <span class="truncate font-semibold">{group.name}</span>
                             <span class="text-xs text-muted-foreground">{group.categories.length}</span>
                         </button>
-                        <div class="hidden shrink-0 gap-6 text-right text-xs text-muted-foreground sm:flex">
-                            <span>Planned <strong class="ml-1 text-foreground">{formatCents(group.planned_cents)}</strong></span>
-                            <span>Activity <strong class="ml-1 text-foreground">{formatCents(group.activity_cents)}</strong></span>
-                            <span>Available <strong class="ml-1 text-foreground">{formatCents(group.available_cents)}</strong></span>
-                        </div>
+                        {#if section.key !== 'transfer'}
+                            <div class="hidden shrink-0 gap-6 text-right text-xs text-muted-foreground sm:flex">
+                                <span>Planned <strong class="ml-1 text-foreground">{formatCents(group.planned_cents)}</strong></span>
+                                <span>Actual <strong class="ml-1 text-foreground">{formatCents(group.activity_cents)}</strong></span>
+                                <span>Remaining <strong class="ml-1 text-foreground">{formatCents(group.available_cents)}</strong></span>
+                            </div>
+                        {/if}
                     </div>
 
                     {#if !collapsedGroups.includes(group.id)}
                         {#if group.categories.length === 0}
                             <p class="px-5 py-4 text-sm text-muted-foreground">No categories in this group yet.</p>
                         {:else}
+                            {@const hiddenCount = group.categories.filter((category) => isUnbudgeted(category)).length}
+                            {@const visibleCategories = group.categories.filter((category) => shownUnbudgeted.includes(group.id) || !isUnbudgeted(category))}
                             <div>
-                                {#each group.categories as category (category.id)}
+                                {#each visibleCategories as category (category.id)}
                     <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 last:border-b-0 sm:grid-cols-[minmax(10rem,15rem)_minmax(8rem,1fr)_5.5rem_4.75rem_auto] sm:px-5" data-test="category-budget-row">
                                         <div class="col-start-1 row-start-1 min-w-0">
                                             <div class="flex items-center gap-2">
@@ -529,7 +516,7 @@
                                             {/if}
                                         </div>
                                         <div class="col-start-2 row-start-3 text-right sm:col-start-4 sm:row-start-1">
-                                            <p class="text-xs text-muted-foreground sm:hidden">Activity</p>
+                                            <p class="text-xs text-muted-foreground sm:hidden">Actual</p>
                                             <p class="text-sm tabular-nums">{category.activity}</p>
                                         </div>
                                         <div class="col-start-2 row-start-1 justify-self-end sm:col-start-5 sm:row-start-1">
@@ -539,7 +526,7 @@
                                                     class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-medium tabular-nums {category.available_cents < 0 ? 'bg-red-50 text-red-600' : category.available_cents > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-700'}"
                                                     data-test="open-move-money"
                                                     data-category-id={category.id}
-                                                    onclick={(event) => openMove(category, event)}
+                                                    onclick={(event) => openMove(event)}
                                                 >
                                                     {#if category.rollover_enabled}
                                                         <svg viewBox="0 0 24 24" class="size-3.5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -553,15 +540,55 @@
                                         </div>
                                     </div>
                                 {/each}
+                                {#if hiddenCount > 0}
+                                    <button type="button" class="px-5 py-3 text-sm font-medium text-emerald-700" data-test={`show-unbudgeted-${group.id}`} onclick={() => toggleUnbudgeted(group.id)}>
+                                        {shownUnbudgeted.includes(group.id) ? 'Hide unbudgeted' : `Show ${hiddenCount} unbudgeted`}
+                                    </button>
+                                {/if}
                             </div>
                         {/if}
                     {/if}
                 </section>
                         {/each}
+                        {#if section.key === 'income'}
+                            {@const incomePlanned = section.groups.reduce((sum, group) => sum + group.planned_cents, 0)}
+                            {@const incomeActual = section.groups.reduce((sum, group) => sum + group.activity_cents, 0)}
+                            {@const incomeRemaining = section.groups.reduce((sum, group) => sum + group.available_cents, 0)}
+                            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t px-4 py-3 text-sm font-semibold sm:grid-cols-[minmax(10rem,15rem)_minmax(8rem,1fr)_5.5rem_4.75rem_auto] sm:px-5" data-test="total-income">
+                                <span>Total Income</span>
+                                <span class="hidden sm:block"></span>
+                                <span class="text-right tabular-nums">{formatCents(incomePlanned)}</span>
+                                <span class="text-right tabular-nums">{formatCents(incomeActual)}</span>
+                                <span class="text-right tabular-nums">{formatCents(incomeRemaining)}</span>
+                            </div>
+                        {/if}
                     {/if}
                 </section>
             {/each}
         {/if}
+    </div>
+    <aside class="rounded-2xl border bg-card p-4" data-test="left-to-budget">
+        <h2 class="text-base font-semibold">Left to budget</h2>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{budgetSummary.left_to_budget}</p>
+        <div class="mt-4 flex gap-3 text-sm">
+            <button type="button" class={summaryTab === 'summary' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'summary')}>Summary</button>
+            <button type="button" class={summaryTab === 'income' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'income')}>Income</button>
+            <button type="button" class={summaryTab === 'expenses' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'expenses')}>Expenses</button>
+        </div>
+        <dl class="mt-4 space-y-2 text-sm">
+            {#if summaryTab === 'income'}
+                <div class="flex justify-between"><dt>Planned</dt><dd class="tabular-nums">{budgetSummary.income.planned}</dd></div>
+                <div class="flex justify-between"><dt>Actual</dt><dd class="tabular-nums">{budgetSummary.income.actual}</dd></div>
+            {:else if summaryTab === 'expenses'}
+                <div class="flex justify-between"><dt>Planned</dt><dd class="tabular-nums">{budgetSummary.expenses.planned}</dd></div>
+                <div class="flex justify-between"><dt>Actual</dt><dd class="tabular-nums">{budgetSummary.expenses.actual}</dd></div>
+            {:else}
+                <div class="flex justify-between"><dt>Income</dt><dd class="tabular-nums">{budgetSummary.income.planned}</dd></div>
+                <div class="flex justify-between"><dt>Expenses</dt><dd class="tabular-nums">{budgetSummary.expenses.planned}</dd></div>
+            {/if}
+        </dl>
+        <a class="mt-4 inline-flex text-sm font-medium text-emerald-700" href={toUrl(planExport({ query: { year, month } }))} data-test="download-plan-csv">Download CSV</a>
+    </aside>
     </div>
 </div>
 
@@ -571,7 +598,7 @@
             <h2 id="move-budget-title" class="text-base font-semibold">Move Budget</h2>
             <button type="button" class="text-muted-foreground" aria-label="Close move budget" onclick={() => (moveOpen = false)}>×</button>
         </div>
-        <form class="mt-4 space-y-3" onsubmit={(event) => { event.preventDefault(); moveFunds(); }}>
+        <form class="mt-4 space-y-3" onsubmit={(event) => { event.preventDefault(); if (moveReady) moveFunds(); }}>
             <input type="hidden" name="year" value={year} />
             <input type="hidden" name="month" value={month} />
             <div class="grid gap-1.5">
@@ -590,11 +617,16 @@
             </div>
             <div class="grid gap-1.5">
                 <Label for="move-amount">Amount</Label>
-                <Input id="move-amount" type="number" min="0.01" step="0.01" bind:value={moveForm.amount} />
+                <Input id="move-amount" type="number" min="0" step="0.01" bind:value={moveForm.amount} />
                 <InputError message={moveErrors.amount} />
             </div>
+            <div class="grid gap-1.5">
+                <Label for="move-memo">Memo</Label>
+                <Input id="move-memo" bind:value={moveForm.memo} />
+                <InputError message={moveErrors.memo} />
+            </div>
             <div class="flex justify-end pt-1">
-                <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" data-test="submit-move-money">Save</Button>
+                <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" disabled={!moveReady} data-test="submit-move-money">Save</Button>
             </div>
         </form>
     </div>
@@ -653,7 +685,7 @@
             <p class="text-xs text-muted-foreground">Opening balance carries into the starting month. Rollover can carry a positive or negative available balance into later months.</p>
             <DialogFooter>
                 <Button type="button" variant="ghost" onclick={() => (categoryOpen = false)}>Cancel</Button>
-                <Button type="submit" disabled={groupsForSelect.length === 0} data-test="submit-create-category">Create category</Button>
+                <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" disabled={groupsForSelect.length === 0} data-test="submit-create-category">Create category</Button>
             </DialogFooter>
         </form>
     </DialogContent>
@@ -667,7 +699,7 @@
             <div class="grid gap-2"><Label for="group-name">Group name</Label><Input id="group-name" bind:value={groupName} /><InputError message={groupErrors.name} /></div>
             <DialogFooter>
                 <Button type="button" variant="ghost" onclick={() => (groupOpen = false)}>Cancel</Button>
-                <Button type="submit" data-test="submit-create-group">Create group</Button>
+                <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" data-test="submit-create-group">Create group</Button>
             </DialogFooter>
         </form>
     </DialogContent>

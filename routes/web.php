@@ -44,6 +44,7 @@ Route::middleware(['auth', 'verified', EnsureAdvisorReadOnly::class])->group(fun
     Route::post('/household/accounts/{account}/restore', [AccountController::class, 'restore'])->name('household.accounts.restore');
 
     Route::get('/household/plan', [PlanController::class, 'index'])->name('household.plan.index');
+    Route::get('/household/plan/export', [PlanController::class, 'export'])->name('household.plan.export');
     Route::post('/household/plan/categories', [PlanController::class, 'storeCategory'])->name('household.plan.categories.store');
     Route::post('/household/plan/groups', [PlanController::class, 'storeGroup'])->name('household.plan.groups.store');
     Route::post('/household/plan/categories/{category}/budget', [PlanController::class, 'setCategoryBudget'])->name('household.plan.categories.budget');

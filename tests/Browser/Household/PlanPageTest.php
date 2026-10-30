@@ -10,9 +10,19 @@ it('creates category groups and budgets individual categories by month', functio
     $page = visit('/household/plan');
 
     $page->assertSee('September 2026')
+        ->assertSee('Income')
         ->assertSee('Expenses')
+        ->assertSee('Transfers')
         ->assertSee('Progress')
+        ->assertSee('Planned')
+        ->assertSee('Actual')
+        ->assertSee('Remaining')
+        ->assertSee('Total Income')
+        ->assertSee('Left to budget')
+        ->assertSee('Summary')
+        ->assertSee('Download CSV')
         ->assertSee('Food & Dining')
+        ->assertSee('unbudgeted')
         ->click('Add group')
         ->fill('#group-name', 'Dining')
         ->click('@submit-create-group')
@@ -22,6 +32,12 @@ it('creates category groups and budgets individual categories by month', functio
         ->select('#category-group', CategoryGroup::query()->where('household_id', $user->household()->id)->where('name', 'Dining')->value('id'))
         ->select('#category-direction', 'expense')
         ->click('@submit-create-category')
+        ->assertDontSee('Takeout')
+        ->assertSee('Dining');
+
+    $diningId = CategoryGroup::query()->where('household_id', $user->household()->id)->where('name', 'Dining')->value('id');
+
+    $page->click('[data-test="show-unbudgeted-'.$diningId.'"]')
         ->assertSee('Takeout')
         ->assertSee('Dining')
         ->click('@plan-next-month')
