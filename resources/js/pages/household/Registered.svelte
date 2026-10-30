@@ -63,7 +63,7 @@
 
 <AppHead title="Registered accounts" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between">
         <Heading title="Registered accounts" description={`TFSA, RRSP, FHSA, RESP context for ${year}. Contribution room is an estimate until you enter an authoritative CRA value.`} />
         <Button type="button" data-test="open-record-event" onclick={() => (showForm = true)}>Record event</Button>

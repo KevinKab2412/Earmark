@@ -126,7 +126,7 @@
 
 <AppHead title="Reports" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <Heading title="Reports" description="Filter, drill down, save, and export. All totals are computed on the server from your ledger." />
 
     <div class="grid gap-3 rounded-xl border p-4 md:grid-cols-5">

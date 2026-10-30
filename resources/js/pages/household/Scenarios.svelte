@@ -4,7 +4,7 @@
     export const layout = {
         breadcrumbs: [
             {
-                title: 'Scenarios',
+                title: 'Forecasting',
                 href: index(),
             },
         ],
@@ -71,11 +71,11 @@
     const label = (field: string): string => field.replace(/_cents$/, '').replace(/_bps$/, '').replace(/_/g, ' ');
 </script>
 
-<AppHead title="Scenarios" />
+<AppHead title="Forecasting" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between">
-        <Heading title="Scenarios" description="Saved, reproducible projections. Each records the assumptions it used, so results are auditable and never rewritten by later catalogue changes." />
+        <Heading title="Forecasting" description="Scenarios are saved, reproducible projections. Each records the assumptions it used, so results are auditable and never rewritten by later catalogue changes." />
         <Button type="button" data-test="open-create-scenario" onclick={() => (showForm = true)}>Add scenario</Button>
     </div>
 

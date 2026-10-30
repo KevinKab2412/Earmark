@@ -4,7 +4,7 @@
     export const layout = {
         breadcrumbs: [
             {
-                title: 'Overview',
+                title: 'Dashboard',
                 href: dashboard(),
             },
         ],
@@ -25,10 +25,8 @@
     import { toUrl } from '@/lib/utils';
     import FreshnessIndicator from '@/components/FreshnessIndicator.svelte';
     import { updateCards } from '@/actions/App/Http/Controllers/Household/DashboardController';
-    import { index as accounts } from '@/routes/household/accounts';
     import { index as goals } from '@/routes/household/goals';
     import { index as holdings } from '@/routes/household/holdings';
-    import { index as members } from '@/routes/household/members';
     import { show as netWorth } from '@/routes/household/net-worth';
     import { index as plan } from '@/routes/household/plan';
     import { index as recurring } from '@/routes/household/recurring';
@@ -135,11 +133,11 @@
     }
 </script>
 
-<AppHead title="Overview" />
+<AppHead title="Dashboard" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-lg font-semibold">Overview</h1>
+        <h1 class="text-lg font-semibold">Dashboard</h1>
         <Button variant="outline" size="sm" onclick={startCustomizing}>
             Customize
         </Button>
@@ -236,7 +234,7 @@
                                         href={toUrl(plan())}
                                         class={props.class}
                                     >
-                                        Open Plan
+                                        Open Budget
                                     </Link>
                                 {/snippet}
                             </Button>
@@ -439,31 +437,4 @@
         </div>
     {/if}
 
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Button variant="outline" class="h-auto justify-start p-4" asChild>
-            {#snippet children(props)}
-                <Link href={toUrl(accounts())} class={props.class}>Accounts</Link
-                >
-            {/snippet}
-        </Button>
-        <Button variant="outline" class="h-auto justify-start p-4" asChild>
-            {#snippet children(props)}
-                <Link href={toUrl(plan())} class={props.class}>Plan</Link>
-            {/snippet}
-        </Button>
-        <Button variant="outline" class="h-auto justify-start p-4" asChild>
-            {#snippet children(props)}
-                <Link href={toUrl(transactions())} class={props.class}
-                    >Transactions</Link
-                >
-            {/snippet}
-        </Button>
-        <Button variant="outline" class="h-auto justify-start p-4" asChild>
-            {#snippet children(props)}
-                <Link href={toUrl(members())} class={props.class}
-                    >Household members</Link
-                >
-            {/snippet}
-        </Button>
-    </div>
 </div>

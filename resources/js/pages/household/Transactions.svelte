@@ -12,7 +12,7 @@
 </script>
 
 <script lang="ts">
-    import { Form, Link, router } from '@inertiajs/svelte';
+    import { Form, router } from '@inertiajs/svelte';
     import { untrack } from 'svelte';
     import SquarePen from '@lucide/svelte/icons/square-pen';
     import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -34,13 +34,6 @@
     } from '@/components/ui/dialog';
     import { Input } from '@/components/ui/input';
     import { Label } from '@/components/ui/label';
-    import { toUrl } from '@/lib/utils';
-    import { index as goals } from '@/routes/household/goals';
-    import { index as importCsv } from '@/routes/household/import';
-    import { index as recurring } from '@/routes/household/recurring';
-    import { index as reports } from '@/routes/household/reports';
-    import { index as rules } from '@/routes/household/rules';
-    import { index as transfers } from '@/routes/household/transfers';
     import { TransactionEntryState } from './TransactionEntryState.svelte';
 
     type Option = { id: string; name: string };
@@ -369,44 +362,10 @@
 
 <AppHead title="Transactions" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between gap-4">
         <Heading title="Transactions" />
         <div class="flex gap-2">
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(importCsv())} class={props.class}
-                        >Import CSV</Link
-                    >
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(rules())} class={props.class}>Rules</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(recurring())} class={props.class}>Recurring</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(goals())} class={props.class}>Goals</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(reports())} class={props.class}>Reports</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(transfers())} class={props.class}
-                        >Transfers</Link
-                    >
-                {/snippet}
-            </Button>
             <Button
                 type="button"
                 data-test="open-create-transaction"

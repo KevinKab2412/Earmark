@@ -12,7 +12,7 @@
 </script>
 
 <script lang="ts">
-    import { Form, Link, router } from '@inertiajs/svelte';
+    import { Form, router } from '@inertiajs/svelte';
     import TransferController from '@/actions/App/Http/Controllers/Household/TransferController';
     import ActionableEmptyState from '@/components/ActionableEmptyState.svelte';
     import AppHead from '@/components/AppHead.svelte';
@@ -22,8 +22,6 @@
     import { Button } from '@/components/ui/button';
     import { Input } from '@/components/ui/input';
     import { Label } from '@/components/ui/label';
-    import { toUrl } from '@/lib/utils';
-    import { index as transactions } from '@/routes/household/transactions';
 
     type Transfer = {
         id: string;
@@ -108,25 +106,16 @@
 
 <AppHead title="Transfers" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between gap-4">
         <Heading title="Transfers" />
-        <div class="flex gap-2">
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(transactions())} class={props.class}
-                        >Transactions</Link
-                    >
-                {/snippet}
-            </Button>
-            <Button
-                type="button"
-                data-test="open-create-transfer"
-                onclick={() => (showForm = true)}
-            >
+        <Button
+            type="button"
+            data-test="open-create-transfer"
+            onclick={() => (showForm = true)}
+        >
                 New transfer
             </Button>
-        </div>
     </div>
 
     {#if transfers.length === 0 && !showForm}

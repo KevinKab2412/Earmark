@@ -19,15 +19,19 @@
 
     let {
         items = [],
+        label = '',
     }: {
         items: PrimaryNavItem[];
+        label?: string;
     } = $props();
 
     const url = currentUrlState();
 </script>
 
 <SidebarGroup class="px-2 py-0">
-    <SidebarGroupLabel>Household</SidebarGroupLabel>
+    {#if label}
+        <SidebarGroupLabel>{label}</SidebarGroupLabel>
+    {/if}
     <SidebarMenu>
         {#each items as item (item.title)}
             <SidebarMenuItem>

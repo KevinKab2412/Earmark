@@ -76,7 +76,7 @@
 
 <AppHead title="Data & backup" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <Heading title="Data & backup" description="Export, restore, or delete your household data. Everything stays on your server — no hosted service." />
 
     <div class="grid gap-6 md:grid-cols-2">

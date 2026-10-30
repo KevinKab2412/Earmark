@@ -12,7 +12,7 @@
 </script>
 
 <script lang="ts">
-    import { Form, Link, router } from '@inertiajs/svelte';
+    import { Form, router } from '@inertiajs/svelte';
     import AccountController from '@/actions/App/Http/Controllers/Household/AccountController';
     import ActionableEmptyState from '@/components/ActionableEmptyState.svelte';
     import AppHead from '@/components/AppHead.svelte';
@@ -22,14 +22,6 @@
     import { Button } from '@/components/ui/button';
     import { Input } from '@/components/ui/input';
     import { Label } from '@/components/ui/label';
-    import { toUrl } from '@/lib/utils';
-    import { index as assumptions } from '@/routes/household/assumptions';
-    import { index as holdings } from '@/routes/household/holdings';
-    import { index as portability } from '@/routes/household/portability';
-    import { index as reconcile } from '@/routes/household/reconcile';
-    import { index as registered } from '@/routes/household/registered';
-    import { index as scenarios } from '@/routes/household/scenarios';
-
     type Account = {
         id: string;
         name: string;
@@ -148,40 +140,10 @@
 
 <AppHead title="Accounts" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between">
         <Heading title="Accounts" />
         <div class="flex gap-2">
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(reconcile())} class={props.class}>Reconcile</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(registered())} class={props.class}>Registered</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(assumptions())} class={props.class}>Assumptions</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(holdings())} class={props.class}>Holdings</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(scenarios())} class={props.class}>Scenarios</Link>
-                {/snippet}
-            </Button>
-            <Button variant="outline" asChild>
-                {#snippet children(props)}
-                    <Link href={toUrl(portability())} class={props.class}>Data &amp; backup</Link>
-                {/snippet}
-            </Button>
             <Button
                 type="button"
                 data-test="open-create-account"

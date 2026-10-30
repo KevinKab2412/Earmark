@@ -59,7 +59,7 @@
                             item.href,
                             url.currentUrl,
                         )
-                            ? 'bg-muted'
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                             : ''}"
                         asChild
                     >

@@ -36,7 +36,7 @@ it('reaches the import page from the transactions page', function () {
     actingAsOwner();
 
     visit('/household/transactions')
-        ->click('Import CSV')
+        ->click('Import')
         ->assertPathIs('/household/import')
         ->assertSee('Import statement');
 });

@@ -57,7 +57,7 @@
 
 <AppHead title="Assumptions" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between">
         <Heading title="Planning assumptions" description={`Effective-dated, source-labelled Canadian assumptions used by projections and scenarios (${year}). Override any value with your own source.`} />
         <Button type="button" data-test="open-override" onclick={() => (showForm = true)}>Override an assumption</Button>

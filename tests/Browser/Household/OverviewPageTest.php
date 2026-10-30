@@ -34,7 +34,7 @@ it('lists overspent categories and opens the plan from overview', function () {
 
     visit('/household/dashboard')
         ->assertSee('Groceries')
-        ->click('Open Plan')
+        ->click('Open Budget')
         ->assertPathIs('/household/plan')
         ->assertSee('Groceries');
 });

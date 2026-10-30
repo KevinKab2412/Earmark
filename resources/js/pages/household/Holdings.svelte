@@ -64,7 +64,7 @@
 
 <AppHead title="Holdings" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="flex items-center justify-between">
         <Heading title="Investments" description="Manually maintained holdings — no brokerage connection or trading." />
         <Button type="button" data-test="open-create-holding" onclick={() => (showForm = true)}>Add holding</Button>

@@ -418,7 +418,7 @@
 
 <AppHead title="Review import" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <Heading
         title="Review import"
         description={`${upload.filename} · ${upload.parsed_count} staged · ${upload.imported_count} promoted`}

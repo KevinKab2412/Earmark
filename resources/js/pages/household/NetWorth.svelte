@@ -154,7 +154,7 @@
 
 <AppHead title="Net Worth" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <div class="rounded-xl border p-4" data-test="networth-history">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <h2 class="text-sm font-semibold">Net-worth trend (last 12 months)</h2>

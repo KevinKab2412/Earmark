@@ -10,7 +10,7 @@
     } = $props();
 </script>
 
-<header class={variant === 'small' ? '' : 'mb-8 space-y-0.5'}>
+<header class={variant === 'small' ? '' : 'mb-2 space-y-0.5'}>
     <h2
         class={variant === 'small'
             ? 'mb-0.5 text-base font-medium'

@@ -4,7 +4,7 @@
     export const layout = {
         breadcrumbs: [
             {
-                title: 'Plan',
+                title: 'Budget',
                 href: index(),
             },
         ],
@@ -250,7 +250,14 @@
     }
 
     function isUnbudgeted(category: Category): boolean {
-        return category.budgetable && category.planned_cents === 0;
+        return (
+            category.budgetable &&
+            category.planned_cents === 0 &&
+            category.activity_cents === 0 &&
+            category.carryover_cents === 0 &&
+            category.opening_balance_cents === 0 &&
+            category.available_cents === 0
+        );
     }
 
     function toggleUnbudgeted(groupId: string): void {
@@ -378,7 +385,7 @@
     }
 </script>
 
-<AppHead title="Plan" />
+<AppHead title="Budget" />
 
 <svelte:window
     onkeydown={(event) => {

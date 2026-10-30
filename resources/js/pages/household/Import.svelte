@@ -229,7 +229,7 @@
 
 <AppHead title="Import statement" />
 
-<div class="flex flex-col gap-6 p-4">
+<div class="flex flex-col gap-4 px-6 py-5">
     <Heading
         title="Import statement"
         description="Upload a CSV (map the columns) or an OFX/QFX/QIF bank export (parsed automatically). Preview, then stage for review — nothing reaches the ledger until you promote it."
