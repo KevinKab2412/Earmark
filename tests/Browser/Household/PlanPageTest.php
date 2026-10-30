@@ -10,6 +10,7 @@ it('creates category groups and budgets individual categories by month', functio
     $page = visit('/household/plan');
 
     $page->assertSee('September 2026')
+        ->assertSee('Today')
         ->assertSee('Income')
         ->assertSee('Expenses')
         ->assertSee('Transfers')
@@ -19,6 +20,8 @@ it('creates category groups and budgets individual categories by month', functio
         ->assertSee('Remaining')
         ->assertSee('Total Income')
         ->assertSee('Left to budget')
+        ->assertSee('Earned')
+        ->assertSee('Spent')
         ->assertSee('Summary')
         ->assertSee('Download CSV')
         ->assertSee('Food & Dining')
@@ -44,7 +47,10 @@ it('creates category groups and budgets individual categories by month', functio
         ->assertSee('October 2026')
         ->click('@plan-prev-month')
         ->click('@plan-prev-month')
-        ->assertSee('August 2026');
+        ->assertSee('August 2026')
+        ->click('@plan-today')
+        ->assertSee('September 2026')
+        ->assertNoJavaScriptErrors();
 
     $this->assertDatabaseHas('category_groups', [
         'household_id' => $user->household()->id,

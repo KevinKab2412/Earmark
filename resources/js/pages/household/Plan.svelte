@@ -15,7 +15,6 @@
     import { Link, router } from '@inertiajs/svelte';
     import PlanController from '@/actions/App/Http/Controllers/Household/PlanController';
     import AppHead from '@/components/AppHead.svelte';
-    import Heading from '@/components/Heading.svelte';
     import InputError from '@/components/InputError.svelte';
     import { Button } from '@/components/ui/button';
     import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog';
@@ -88,6 +87,7 @@
         planIndex({ query: { year: cursor.year, month: cursor.month } });
 
     const selectClass = 'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm';
+    const planRow = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 sm:grid-cols-[minmax(11rem,1.35fr)_minmax(5rem,1fr)_5.25rem_5.25rem_6.5rem] sm:px-5';
 
     let editingCategoryId = $state<string | null>(null);
     let budgetDraft = $state('');
@@ -348,6 +348,20 @@
         moveOpen = true;
     }
 
+    function meterPercent(actualCents: number, plannedCents: number): number {
+        const actual = Math.abs(actualCents);
+
+        if (plannedCents <= 0) {
+            return actual > 0 ? 100 : 0;
+        }
+
+        return Math.min(100, (actual / plannedCents) * 100);
+    }
+
+    function meterIsOver(actualCents: number, plannedCents: number): boolean {
+        return plannedCents > 0 && Math.abs(actualCents) > plannedCents;
+    }
+
     function formatCents(cents: number): string {
         const value = Math.abs(cents) / 100;
         const formatted = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(value);
@@ -374,28 +388,34 @@
     }}
 />
 
-<div class="mx-auto flex max-w-7xl flex-col gap-6 p-4 sm:p-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <Heading title="Plan" description="Give every category a plan, then move money as your month changes." />
+<div class="mx-auto flex max-w-7xl flex-col gap-4 bg-white p-4 sm:p-6">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
                 {#snippet children(props)}
                     <Link href={toUrl(monthQuery(previous))} class={props.class} data-test="plan-prev-month">←</Link>
                 {/snippet}
             </Button>
-            <h2 class="min-w-32 text-center text-lg font-semibold">{monthLabel}</h2>
+            <h1 class="min-w-36 text-center text-lg font-semibold">{monthLabel}</h1>
             <Button variant="outline" size="sm" asChild>
                 {#snippet children(props)}
                     <Link href={toUrl(monthQuery(next))} class={props.class} data-test="plan-next-month">→</Link>
                 {/snippet}
             </Button>
-            <Button type="button" variant="outline" onclick={() => (groupOpen = true)}>Add group</Button>
-            <Button type="button" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={openCategoryDialog}>Add category</Button>
+            <Button variant="outline" size="sm" asChild>
+                {#snippet children(props)}
+                    <Link href={toUrl(planIndex())} class={props.class} data-test="plan-today">Today</Link>
+                {/snippet}
+            </Button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onclick={() => (groupOpen = true)}>Add group</Button>
+            <Button type="button" size="sm" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={openCategoryDialog}>Add category</Button>
         </div>
     </div>
 
-    <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-    <div class="rounded-2xl border bg-card">
+    <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
+    <div class="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         {#if groups.length === 0}
             <div class="p-10 text-center">
                 <h2 class="text-lg font-semibold">Start with a category group</h2>
@@ -405,37 +425,36 @@
         {:else}
             {#each budgetSections as section (section.key)}
                 <section class="border-b last:border-b-0">
-                    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-neutral-100 px-4 py-2 text-sm font-medium sm:grid-cols-[minmax(10rem,15rem)_minmax(8rem,1fr)_5.5rem_4.75rem_auto] sm:px-5">
+                    <div class="{planRow} border-b border-neutral-200 bg-white py-2 text-sm font-semibold">
                         <button type="button" class="flex min-w-0 items-center gap-2 text-left" onclick={() => toggleSection(section.key)} aria-expanded={!collapsedSections.includes(section.key)}>
                             <span class="text-muted-foreground">{collapsedSections.includes(section.key) ? '▸' : '▾'}</span>
                             <span class="truncate">{section.label}</span>
                         </button>
                         {#if section.key !== 'transfer'}
-                            <span class="text-center text-xs font-normal text-muted-foreground">
+                            <span class="hidden text-center text-xs font-normal text-neutral-500 sm:block">
                                 Progress
                                 <span class="sr-only">. The line marks today's pace through the month.</span>
                             </span>
-                            <span class="text-right text-xs font-normal text-muted-foreground">Planned</span>
-                            <span class="text-right text-xs font-normal text-muted-foreground">Actual</span>
-                            <span class="text-right text-xs font-normal text-muted-foreground">Remaining</span>
+                            <span class="hidden text-right text-xs font-normal text-neutral-500 sm:block">Planned</span>
+                            <span class="hidden text-right text-xs font-normal text-neutral-500 sm:block">Actual</span>
+                            <span class="hidden text-right text-xs font-normal text-neutral-500 sm:block">Remaining</span>
                         {/if}
                     </div>
 
                     {#if !collapsedSections.includes(section.key)}
                         {#each section.groups as group (group.id)}
                 <section class="border-b last:border-b-0" data-test="category-group">
-                    <div class="flex items-center justify-between gap-4 bg-muted/40 px-4 py-3 sm:px-5">
+                    <div class="{planRow} bg-neutral-50 py-2">
                         <button type="button" class="flex min-w-0 items-center gap-2 text-left" onclick={() => toggleGroup(group.id)} aria-expanded={!collapsedGroups.includes(group.id)}>
-                            <span class="text-muted-foreground">{collapsedGroups.includes(group.id) ? '▸' : '▾'}</span>
-                            <span class="truncate font-semibold">{group.name}</span>
-                            <span class="text-xs text-muted-foreground">{group.categories.length}</span>
+                            <span class="text-neutral-400">{collapsedGroups.includes(group.id) ? '▸' : '▾'}</span>
+                            <span class="truncate text-sm font-semibold">{group.name}</span>
+                            <span class="text-xs text-neutral-500">{group.categories.length}</span>
                         </button>
                         {#if section.key !== 'transfer'}
-                            <div class="hidden shrink-0 gap-6 text-right text-xs text-muted-foreground sm:flex">
-                                <span>Planned <strong class="ml-1 text-foreground">{formatCents(group.planned_cents)}</strong></span>
-                                <span>Actual <strong class="ml-1 text-foreground">{formatCents(group.activity_cents)}</strong></span>
-                                <span>Remaining <strong class="ml-1 text-foreground">{formatCents(group.available_cents)}</strong></span>
-                            </div>
+                            <span class="hidden sm:block"></span>
+                            <span class="hidden text-right text-sm font-medium tabular-nums sm:block">{formatCents(group.planned_cents)}</span>
+                            <span class="hidden text-right text-sm tabular-nums text-neutral-700 sm:block">{formatCents(group.activity_cents)}</span>
+                            <span class="hidden text-right text-sm font-medium tabular-nums sm:block">{formatCents(group.available_cents)}</span>
                         {/if}
                     </div>
 
@@ -447,7 +466,7 @@
                             {@const visibleCategories = group.categories.filter((category) => shownUnbudgeted.includes(group.id) || !isUnbudgeted(category))}
                             <div>
                                 {#each visibleCategories as category (category.id)}
-                    <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 last:border-b-0 sm:grid-cols-[minmax(10rem,15rem)_minmax(8rem,1fr)_5.5rem_4.75rem_auto] sm:px-5" data-test="category-budget-row">
+                    <div class="{planRow} border-b border-neutral-100 bg-white py-1.5 last:border-b-0" data-test="category-budget-row">
                                         <div class="col-start-1 row-start-1 min-w-0">
                                             <div class="flex items-center gap-2">
                                                 {#if category.icon}
@@ -465,7 +484,7 @@
                                         <div class="col-span-2 col-start-1 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                                             {#if category.budgetable}
                                                 {@const tone = progressTone(category)}
-                                                <div class="relative h-2.5 rounded-full bg-neutral-200" role="img" aria-label={`${category.name} progress`}>
+                                                <div class="relative h-1.5 rounded-full bg-neutral-200" role="img" aria-label={`${category.name} progress`}>
                                                     <div
                                                         class="h-full rounded-full {tone === 'over' ? 'bg-red-500' : tone === 'ok' ? 'bg-emerald-600' : 'bg-transparent'}"
                                                         style="width: {progressFill(category)}%"
@@ -479,7 +498,7 @@
                                         <div class="relative col-start-1 row-start-3 sm:col-start-3 sm:row-start-1">
                                             <p class="text-xs text-muted-foreground sm:hidden">Planned</p>
                                             {#if category.budgetable}
-                                                <button type="button" class="h-9 w-full rounded-md border bg-background px-2 text-right text-sm tabular-nums shadow-sm hover:border-emerald-600 focus-visible:outline-2 focus-visible:outline-emerald-600" onclick={() => openBudgetEditor(category)} aria-expanded={editingCategoryId === category.id} data-test="edit-category-budget">
+                                                <button type="button" class="h-8 w-full rounded-md border border-neutral-200 bg-white px-2 text-right text-sm tabular-nums hover:border-emerald-600 focus-visible:outline-2 focus-visible:outline-emerald-600" onclick={() => openBudgetEditor(category)} aria-expanded={editingCategoryId === category.id} data-test="edit-category-budget">
                                                     {category.planned}
                                                 </button>
                                             {:else}
@@ -554,7 +573,7 @@
                             {@const incomePlanned = section.groups.reduce((sum, group) => sum + group.planned_cents, 0)}
                             {@const incomeActual = section.groups.reduce((sum, group) => sum + group.activity_cents, 0)}
                             {@const incomeRemaining = section.groups.reduce((sum, group) => sum + group.available_cents, 0)}
-                            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t px-4 py-3 text-sm font-semibold sm:grid-cols-[minmax(10rem,15rem)_minmax(8rem,1fr)_5.5rem_4.75rem_auto] sm:px-5" data-test="total-income">
+                            <div class="{planRow} border-t border-neutral-200 bg-white py-2.5 text-sm font-semibold" data-test="total-income">
                                 <span>Total Income</span>
                                 <span class="hidden sm:block"></span>
                                 <span class="text-right tabular-nums">{formatCents(incomePlanned)}</span>
@@ -567,15 +586,35 @@
             {/each}
         {/if}
     </div>
-    <aside class="rounded-2xl border bg-card p-4" data-test="left-to-budget">
-        <h2 class="text-base font-semibold">Left to budget</h2>
-        <p class="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{budgetSummary.left_to_budget}</p>
-        <div class="mt-4 flex gap-3 text-sm">
-            <button type="button" class={summaryTab === 'summary' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'summary')}>Summary</button>
-            <button type="button" class={summaryTab === 'income' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'income')}>Income</button>
-            <button type="button" class={summaryTab === 'expenses' ? 'font-semibold text-emerald-700' : 'text-muted-foreground'} onclick={() => (summaryTab = 'expenses')}>Expenses</button>
+    <aside class="rounded-lg border border-neutral-200 bg-white p-4 lg:sticky lg:top-4" data-test="left-to-budget">
+        <h2 class="text-sm font-medium text-neutral-500">Left to budget</h2>
+        <p class="mt-1 text-3xl font-semibold tabular-nums text-emerald-700">{budgetSummary.left_to_budget}</p>
+        <div class="mt-4 space-y-3">
+            <div data-test="plan-income-bar">
+                <div class="mb-1 flex justify-between text-xs text-neutral-500">
+                    <span>Earned</span>
+                    <span class="tabular-nums">{budgetSummary.income.actual}</span>
+                </div>
+                <div class="h-2 overflow-hidden rounded-full bg-neutral-200" role="img" aria-label="Income earned versus remaining">
+                    <div class="h-full rounded-full {meterIsOver(budgetSummary.income.actual_cents, budgetSummary.income.planned_cents) ? 'bg-red-500' : 'bg-emerald-600'}" style="width: {meterPercent(budgetSummary.income.actual_cents, budgetSummary.income.planned_cents)}%"></div>
+                </div>
+            </div>
+            <div data-test="plan-expense-bar">
+                <div class="mb-1 flex justify-between text-xs text-neutral-500">
+                    <span>Spent</span>
+                    <span class="tabular-nums">{budgetSummary.expenses.actual}</span>
+                </div>
+                <div class="h-2 overflow-hidden rounded-full bg-neutral-200" role="img" aria-label="Expenses spent versus remaining">
+                    <div class="h-full rounded-full {meterIsOver(budgetSummary.expenses.actual_cents, budgetSummary.expenses.planned_cents) ? 'bg-red-500' : 'bg-emerald-600'}" style="width: {meterPercent(budgetSummary.expenses.actual_cents, budgetSummary.expenses.planned_cents)}%"></div>
+                </div>
+            </div>
         </div>
-        <dl class="mt-4 space-y-2 text-sm">
+        <div class="mt-4 flex gap-3 border-b border-neutral-200 text-sm">
+            <button type="button" class="-mb-px border-b-2 px-0.5 pb-2 {summaryTab === 'summary' ? 'border-emerald-600 font-semibold text-emerald-700' : 'border-transparent text-neutral-500'}" onclick={() => (summaryTab = 'summary')}>Summary</button>
+            <button type="button" class="-mb-px border-b-2 px-0.5 pb-2 {summaryTab === 'income' ? 'border-emerald-600 font-semibold text-emerald-700' : 'border-transparent text-neutral-500'}" onclick={() => (summaryTab = 'income')}>Income</button>
+            <button type="button" class="-mb-px border-b-2 px-0.5 pb-2 {summaryTab === 'expenses' ? 'border-emerald-600 font-semibold text-emerald-700' : 'border-transparent text-neutral-500'}" onclick={() => (summaryTab = 'expenses')}>Expenses</button>
+        </div>
+        <dl class="mt-3 space-y-2 text-sm">
             {#if summaryTab === 'income'}
                 <div class="flex justify-between"><dt>Planned</dt><dd class="tabular-nums">{budgetSummary.income.planned}</dd></div>
                 <div class="flex justify-between"><dt>Actual</dt><dd class="tabular-nums">{budgetSummary.income.actual}</dd></div>
