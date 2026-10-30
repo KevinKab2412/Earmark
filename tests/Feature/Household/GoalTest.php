@@ -5,12 +5,14 @@ use App\Enums\PositionPurpose;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\CategoryBudgetPlan;
+use App\Models\CategoryRolloverSetting;
 use App\Models\FinancialPosition;
 use App\Models\Goal;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Valuation;
 use App\Services\Goal\GoalService;
+use Illuminate\Database\QueryException;
 
 test('a save-up goal reads progress from its linked category balance', function () {
     $user = User::factory()->create();
@@ -134,4 +136,205 @@ test('a user cannot update another household goal', function () {
     $this->actingAs($user)->patch(route('household.goals.update', $other), [
         'name' => 'x', 'type' => 'save_up', 'target_amount' => 1,
     ])->assertForbidden();
+});
+
+test('linking a savings goal turns rollover on and a second active goal is rejected', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $month = now()->startOfMonth()->toDateString();
+
+    $this->actingAs($user)->post(route('household.goals.store'), [
+        'name' => 'Grocery cushion',
+        'type' => 'save_up',
+        'target_amount' => 20000,
+        'linked_category_id' => $category->id,
+    ])->assertRedirect(route('household.goals.index'))->assertSessionHasNoErrors();
+
+    $first = Goal::query()->where('household_id', $household->id)->where('name', 'Grocery cushion')->firstOrFail();
+
+    expect((bool) CategoryRolloverSetting::query()
+        ->where('category_id', $category->id)
+        ->whereDate('effective_month', $month)
+        ->value('enabled'))->toBeTrue();
+
+    $this->actingAs($user)->from(route('household.goals.index'))->post(route('household.goals.store'), [
+        'name' => 'Second cushion',
+        'type' => 'save_up',
+        'target_amount' => 10000,
+        'linked_category_id' => $category->id,
+    ])->assertSessionHasErrors('linked_category_id');
+
+    expect(Goal::query()->where('linked_category_id', $category->id)->count())->toBe(1)
+        ->and($first->refresh()->name)->toBe('Grocery cushion');
+
+    $otherCategory = $household->categories()->where('name', 'Restaurants')->firstOrFail();
+
+    $this->actingAs($user)->post(route('household.goals.store'), [
+        'name' => 'Dining cushion',
+        'type' => 'save_up',
+        'target_amount' => 10000,
+        'linked_category_id' => $otherCategory->id,
+    ])->assertSessionHasNoErrors();
+});
+
+test('an archived savings goal does not block a new active goal on that category', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $category = $household->categories()->where('name', 'Vacation')->firstOrFail();
+
+    Goal::factory()->create([
+        'household_id' => $household->id,
+        'type' => 'save_up',
+        'status' => 'archived',
+        'linked_category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)->post(route('household.goals.store'), [
+        'name' => 'Active vacation',
+        'type' => 'save_up',
+        'target_amount' => 30000,
+        'linked_category_id' => $category->id,
+    ])->assertSessionHasNoErrors();
+
+    expect(Goal::query()->where('linked_category_id', $category->id)->count())->toBe(2);
+});
+
+test('the database rejects a second active savings goal on the same category', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $category = $household->categories()->where('name', 'Emergency Fund')->firstOrFail();
+
+    Goal::factory()->create([
+        'household_id' => $household->id,
+        'type' => 'save_up',
+        'status' => 'active',
+        'linked_category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    expect(fn () => Goal::query()->create([
+        'household_id' => $household->id,
+        'name' => 'Duplicate fund',
+        'type' => 'save_up',
+        'status' => 'active',
+        'target_amount' => 100,
+        'linked_category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+    ]))->toThrow(QueryException::class);
+
+    expect(Goal::query()->where('linked_category_id', $category->id)->count())->toBe(1);
+});
+
+test('updating a goal onto a category that already has an active savings goal is rejected', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $first = Goal::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'First grocery goal',
+        'type' => 'save_up',
+        'status' => 'active',
+        'linked_category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+    ]);
+    $second = Goal::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Parked goal',
+        'type' => 'save_up',
+        'status' => 'archived',
+        'linked_category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)->from(route('household.goals.index'))->patch(route('household.goals.update', $second), [
+        'name' => 'Parked goal',
+        'type' => 'save_up',
+        'target_amount' => $second->target_amount,
+        'status' => 'active',
+        'linked_category_id' => $category->id,
+    ])->assertSessionHasErrors('linked_category_id');
+
+    expect($second->refresh()->status)->toBe('archived')
+        ->and($first->refresh()->name)->toBe('First grocery goal');
+
+    $this->actingAs($user)->patch(route('household.goals.update', $first), [
+        'name' => 'Renamed grocery goal',
+        'type' => 'save_up',
+        'target_amount' => $first->target_amount,
+        'status' => 'active',
+        'linked_category_id' => $category->id,
+    ])->assertSessionHasNoErrors();
+
+    expect($first->refresh()->name)->toBe('Renamed grocery goal');
+});
+
+test('a debt goal reports the liability balance and ignores the payment category', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $account = Account::factory()->create([
+        'household_id' => $household->id,
+        'type' => 'credit_card',
+        'starting_balance' => -10000,
+    ]);
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'amount' => 3000,
+        'date' => now()->toDateString(),
+        'created_by_user_id' => $user->id,
+    ]);
+    $paymentCategory = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $paymentCategory->budgetPlans()->whereDate('effective_month', now()->startOfMonth()->toDateString())->update([
+        'planned_amount' => 999999,
+    ]);
+
+    $this->actingAs($user)->post(route('household.goals.store'), [
+        'name' => 'Card payoff',
+        'type' => 'pay_down',
+        'target_amount' => 0,
+        'linked_account_id' => $account->id,
+        'payment_category_id' => $paymentCategory->id,
+        'principal' => 1,
+    ])->assertRedirect(route('household.goals.index'))->assertSessionHasNoErrors();
+
+    $goal = Goal::query()->where('household_id', $household->id)->where('name', 'Card payoff')->firstOrFail();
+
+    expect($goal->payment_category_id)->toBe($paymentCategory->id)
+        ->and(app(GoalService::class)->principal($goal))->toBe(7000);
+
+    $this->actingAs($user)->get(route('household.goals.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('goals.0.name', 'Card payoff')
+            ->where('goals.0.principal_formatted', '$70.00')
+        );
+});
+
+test('a goal cannot link another household category or account', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $other = User::factory()->create();
+    $foreignCategory = $other->household()->categories()->where('name', 'Emergency Fund')->firstOrFail();
+    $foreignAccount = Account::factory()->create([
+        'household_id' => $other->household()->id,
+        'type' => 'credit_card',
+        'starting_balance' => -5000,
+    ]);
+
+    $this->actingAs($user)->from(route('household.goals.index'))->post(route('household.goals.store'), [
+        'name' => 'Stolen savings',
+        'type' => 'save_up',
+        'target_amount' => 1000,
+        'linked_category_id' => $foreignCategory->id,
+    ])->assertSessionHasErrors('linked_category_id');
+
+    $this->actingAs($user)->from(route('household.goals.index'))->post(route('household.goals.store'), [
+        'name' => 'Stolen debt',
+        'type' => 'pay_down',
+        'target_amount' => 0,
+        'linked_account_id' => $foreignAccount->id,
+    ])->assertSessionHasErrors('linked_account_id');
+
+    expect(Goal::query()->where('household_id', $household->id)->whereIn('name', ['Stolen savings', 'Stolen debt'])->count())->toBe(0);
 });

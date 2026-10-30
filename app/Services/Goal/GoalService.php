@@ -20,6 +20,10 @@ class GoalService
 
     public function currentAmount(Goal $goal): int
     {
+        if ($goal->type === 'pay_down') {
+            return $this->signedLiabilityBalance($goal);
+        }
+
         if ($goal->linked_category_id !== null && $goal->category !== null) {
             $now = CarbonImmutable::now();
 
@@ -27,9 +31,7 @@ class GoalService
         }
 
         if ($goal->linked_account_id !== null && $goal->account !== null) {
-            $movements = (int) Transaction::query()->where('account_id', $goal->account->id)->sum('amount');
-
-            return $goal->account->starting_balance + $movements;
+            return $this->accountBalance($goal);
         }
 
         if ($goal->linked_position_id !== null && $goal->position !== null) {
@@ -67,12 +69,33 @@ class GoalService
         }
 
         if ($goal->linked_account_id !== null && $goal->account !== null) {
-            $movements = (int) Transaction::query()->where('account_id', $goal->account->id)->sum('amount');
-
-            return abs($goal->account->starting_balance + $movements);
+            return abs($this->accountBalance($goal));
         }
 
         return abs($goal->principal ?? 0);
+    }
+
+    private function signedLiabilityBalance(Goal $goal): int
+    {
+        if ($goal->linked_position_id !== null && $goal->position !== null) {
+            return $this->latestValuationAmount($goal) ?? 0;
+        }
+
+        if ($goal->linked_account_id !== null && $goal->account !== null) {
+            return $this->accountBalance($goal);
+        }
+
+        return $goal->principal ?? 0;
+    }
+
+    private function accountBalance(Goal $goal): int
+    {
+        $movements = (int) Transaction::query()
+            ->where('household_id', $goal->household_id)
+            ->where('account_id', $goal->account->id)
+            ->sum('amount');
+
+        return $goal->account->starting_balance + $movements;
     }
 
     /**

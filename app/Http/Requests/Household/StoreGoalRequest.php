@@ -60,6 +60,14 @@ class StoreGoalRequest extends FormRequest
             if ($type === 'save_up' && (! empty($accountId) || ! empty($positionId))) {
                 $validator->errors()->add('linked_category_id', __('Savings goals track a budget category.'));
             }
+
+            $status = $this->input('status', 'active');
+
+            if ($type === 'save_up' && $status === 'active' && is_string($categoryId) && $categoryId !== '') {
+                if (Goal::anotherActiveSavingsGoalExists($this->household()->id, $categoryId)) {
+                    $validator->errors()->add('linked_category_id', __('This category already has an active savings goal.'));
+                }
+            }
         }];
     }
 }

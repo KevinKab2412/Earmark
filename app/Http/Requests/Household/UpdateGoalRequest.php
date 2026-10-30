@@ -69,6 +69,16 @@ class UpdateGoalRequest extends FormRequest
             if ($type === 'save_up' && (! empty($accountId) || ! empty($positionId))) {
                 $validator->errors()->add('linked_category_id', __('Savings goals track a budget category.'));
             }
+
+            $status = $this->input('status', 'active');
+            $goal = $this->route('goal');
+            $exceptGoalId = $goal instanceof Goal ? $goal->id : null;
+
+            if ($type === 'save_up' && $status === 'active' && is_string($categoryId) && $categoryId !== '') {
+                if (Goal::anotherActiveSavingsGoalExists($this->household()->id, $categoryId, $exceptGoalId)) {
+                    $validator->errors()->add('linked_category_id', __('This category already has an active savings goal.'));
+                }
+            }
         }];
     }
 }

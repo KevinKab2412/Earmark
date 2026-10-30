@@ -65,12 +65,6 @@ return new class extends Migration
             $table->foreignUlid('payment_category_id')->nullable()->constrained('categories')->nullOnDelete();
         });
 
-        Schema::getConnection()->statement(<<<'SQL'
-            CREATE UNIQUE INDEX goals_one_active_savings_category
-            ON goals (linked_category_id)
-            WHERE type = 'save_up' AND status = 'active' AND linked_category_id IS NOT NULL
-        SQL);
-
         $this->dropForeignColumn('goals', 'linked_bucket_id');
         $this->dropForeignColumn('payee_rules', 'bucket_id');
         $this->dropForeignColumn('staged_transaction_splits', 'bucket_id');
@@ -86,6 +80,12 @@ return new class extends Migration
         Schema::table('categories', function (Blueprint $table): void {
             $table->dropColumn('type');
         });
+
+        Schema::getConnection()->statement(<<<'SQL'
+            CREATE UNIQUE INDEX goals_one_active_savings_category
+            ON goals (linked_category_id)
+            WHERE type = 'save_up' AND status = 'active' AND linked_category_id IS NOT NULL
+        SQL);
     }
 
     public function down(): void

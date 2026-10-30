@@ -89,7 +89,8 @@ test('rollover carries both positive and negative category balances', function (
 
     app(SetCategoryRollover::class)->handle($this->category, false, 2026, 3, $this->user);
 
-    expect($this->service->summaryForMonth($this->category, 2026, 3)['carryover'])->toBe(0);
+    expect($this->service->summaryForMonth($this->category, 2026, 3)['carryover'])->toBe(8000)
+        ->and($this->service->summaryForMonth($this->category, 2026, 4)['carryover'])->toBe(0);
 });
 
 test('moves reduce one category and increase another by the same amount', function () {

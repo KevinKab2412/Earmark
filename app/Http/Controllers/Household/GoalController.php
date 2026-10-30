@@ -36,7 +36,7 @@ class GoalController extends Controller
         $goals = Goal::query()
             ->where('household_id', $household->id)
             ->whereIn('status', ['active', 'achieved'])
-            ->with(['account:id,name', 'category:id,name', 'paymentCategory:id,name', 'position:id,name'])
+            ->with(['account:id,name,starting_balance', 'category:id,name', 'paymentCategory:id,name', 'position:id,name'])
             ->orderBy('sort_order')->orderBy('created_at')
             ->get()
             ->map(function (Goal $goal): array {

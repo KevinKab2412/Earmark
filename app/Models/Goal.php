@@ -15,6 +15,19 @@ class Goal extends Model
 
     public const TYPES = ['save_up', 'pay_down'];
 
+    public static function anotherActiveSavingsGoalExists(string $householdId, string $categoryId, ?string $exceptGoalId = null): bool
+    {
+        return static::query()
+            ->where('household_id', $householdId)
+            ->where('linked_category_id', $categoryId)
+            ->where('type', 'save_up')
+            ->where('status', 'active')
+            ->when($exceptGoalId !== null, function ($query) use ($exceptGoalId): void {
+                $query->whereKeyNot($exceptGoalId);
+            })
+            ->exists();
+    }
+
     protected $fillable = [
         'household_id',
         'name',
