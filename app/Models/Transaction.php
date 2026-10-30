@@ -46,19 +46,19 @@ class Transaction extends Model
             }
         });
 
-        static::deleting(function (Transaction $transaction) {
+        static::deleting(function (Transaction $transaction): void {
             if (! $transaction->transfer_pair_id) {
                 return;
             }
 
             static::query()
+                ->where('household_id', $transaction->household_id)
                 ->where('transfer_pair_id', $transaction->transfer_pair_id)
                 ->where('id', '!=', $transaction->id)
                 ->get()
-                ->each(function (Transaction $sibling) {
+                ->each(function (Transaction $sibling): void {
                     $sibling->transfer_pair_id = null;
                     $sibling->saveQuietly();
-                    $sibling->delete();
                 });
         });
     }

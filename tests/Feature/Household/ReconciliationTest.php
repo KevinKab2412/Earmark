@@ -14,7 +14,6 @@ function reconTransaction(User $user, Account $account, array $attributes = []):
         'household_id' => $user->household()->id,
         'account_id' => $account->id,
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ], $attributes));
 }

@@ -44,10 +44,11 @@ Route::middleware(['auth', 'verified', EnsureAdvisorReadOnly::class])->group(fun
     Route::post('/household/accounts/{account}/restore', [AccountController::class, 'restore'])->name('household.accounts.restore');
 
     Route::get('/household/plan', [PlanController::class, 'index'])->name('household.plan.index');
-    Route::post('/household/plan/buckets', [PlanController::class, 'storeBucket'])->name('household.plan.buckets.store');
     Route::post('/household/plan/categories', [PlanController::class, 'storeCategory'])->name('household.plan.categories.store');
-    Route::post('/household/plan/assign', [PlanController::class, 'assign'])->name('household.plan.assign');
-    Route::post('/household/plan/buckets/{bucket}/obligation', [PlanController::class, 'setObligation'])->name('household.plan.buckets.obligation');
+    Route::post('/household/plan/groups', [PlanController::class, 'storeGroup'])->name('household.plan.groups.store');
+    Route::post('/household/plan/categories/{category}/budget', [PlanController::class, 'setCategoryBudget'])->name('household.plan.categories.budget');
+    Route::post('/household/plan/categories/{category}/rollover', [PlanController::class, 'setCategoryRollover'])->name('household.plan.categories.rollover');
+    Route::post('/household/plan/move', [PlanController::class, 'move'])->name('household.plan.move');
 
     Route::get('/household/transactions', [TransactionController::class, 'index'])->name('household.transactions.index');
     Route::post('/household/transactions', [TransactionController::class, 'store'])->name('household.transactions.store');

@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\PayeeRule;
 use App\Services\Payee\PayeeRuleService;
@@ -9,8 +8,7 @@ test('suggest returns null result when no rules exist', function () {
     $result = (new PayeeRuleService)->suggest('Loblaws #5025');
 
     expect($result['rule'])->toBeNull()
-        ->and($result['category_id'])->toBeNull()
-        ->and($result['bucket_id'])->toBeNull();
+        ->and($result['category_id'])->toBeNull();
 });
 
 test('suggest matches by case-insensitive substring', function () {
@@ -86,18 +84,15 @@ test('suggest returns null result for empty payee', function () {
     expect($result['rule'])->toBeNull();
 });
 
-test('rule with bucket assigns both category and bucket', function () {
+test('rule assigns a single category', function () {
     $category = Category::factory()->create();
-    $bucket = Bucket::factory()->create();
 
     PayeeRule::factory()->create([
         'pattern' => 'rogers',
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
     ]);
 
     $result = (new PayeeRuleService)->suggest('Rogers Wireless');
 
-    expect($result['category_id'])->toBe($category->id)
-        ->and($result['bucket_id'])->toBe($bucket->id);
+    expect($result['category_id'])->toBe($category->id);
 });

@@ -23,7 +23,6 @@ class PayeeRuleFactory extends Factory
             'pattern' => fake()->company(),
             'enabled' => true,
             'category_id' => Category::factory(),
-            'bucket_id' => null,
             'rename_to' => null,
             'hide_from_reports' => false,
             'mark_for_review' => false,

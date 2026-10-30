@@ -22,7 +22,6 @@ class StorePayeeRuleRequest extends FormRequest
             'pattern' => ['required', 'string', 'max:255'],
             'enabled' => ['required', 'boolean'],
             'category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)],
-            'bucket_id' => ['nullable', 'string', Rule::exists('buckets', 'id')->where('household_id', $householdId)],
             'rename_to' => ['nullable', 'string', 'max:255'],
             'hide_from_reports' => ['required', 'boolean'],
             'mark_for_review' => ['required', 'boolean'],

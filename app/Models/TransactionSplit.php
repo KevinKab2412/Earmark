@@ -16,7 +16,6 @@ class TransactionSplit extends Model
     protected $fillable = [
         'transaction_id',
         'category_id',
-        'bucket_id',
         'amount',
         'memo',
     ];
@@ -45,13 +44,5 @@ class TransactionSplit extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
-    }
-
-    /**
-     * @return BelongsTo<Bucket, $this>
-     */
-    public function bucket(): BelongsTo
-    {
-        return $this->belongsTo(Bucket::class);
     }
 }

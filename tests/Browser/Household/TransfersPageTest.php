@@ -74,5 +74,8 @@ it('deletes a transfer from the transfers screen', function () {
     $page->click('@destroy-transfer-'.$outflow->id)
         ->assertDontSee('$250.00');
 
-    expect(Transaction::query()->where('household_id', $household->id)->count())->toBe(0);
+    $survivor = Transaction::query()->where('household_id', $household->id)->sole();
+
+    expect($survivor->id)->not->toBe($outflow->id)
+        ->and($survivor->transfer_pair_id)->toBeNull();
 });

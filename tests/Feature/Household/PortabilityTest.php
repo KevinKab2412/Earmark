@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Goal;
 use App\Models\Transaction;
@@ -13,12 +12,10 @@ function seededHousehold(User $user): array
     $household = $user->household();
     $account = Account::factory()->create(['household_id' => $household->id, 'name' => 'Chequing']);
     $category = Category::factory()->create(['household_id' => $household->id]);
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
     $transaction = Transaction::factory()->create([
         'household_id' => $household->id,
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
         'amount' => -7250,
         'created_by_user_id' => $user->id,
     ]);

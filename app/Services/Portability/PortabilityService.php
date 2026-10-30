@@ -16,34 +16,39 @@ use Illuminate\Support\Str;
  */
 class PortabilityService
 {
-    public const SCHEMA_VERSION = '1';
+    public const SCHEMA_VERSION = '2';
 
     /** Tables owned directly by a household (have household_id). */
     private const HOUSEHOLD_TABLES = [
-        'categories', 'buckets', 'accounts', 'financial_positions', 'household_plans',
-        'goals', 'holdings', 'scenarios', 'payee_rules', 'recurring_schedules', 'saved_reports',
+        'category_groups', 'categories', 'accounts', 'financial_positions', 'household_plans',
+        'category_budget_moves', 'goals', 'holdings', 'scenarios', 'payee_rules', 'recurring_schedules', 'saved_reports',
     ];
 
     /** Child tables reached through a parent, with the parent linkage for scoping. */
     private const CHILD_TABLES = [
-        'transactions' => null, // has household_id too, but restored after accounts/categories/buckets
+        'transactions' => null, // has household_id too, but restored after accounts/categories
         'transaction_splits' => ['parent' => 'transactions', 'key' => 'transaction_id'],
         'valuations' => ['parent' => 'financial_positions', 'key' => 'financial_position_id'],
         'contribution_phases' => ['parent' => 'household_plans', 'key' => 'household_plan_id'],
+        'category_budget_plans' => ['parent' => 'categories', 'key' => 'category_id'],
+        'category_rollover_settings' => ['parent' => 'categories', 'key' => 'category_id'],
     ];
 
     /** Restore order (parents before children) and the FK columns to remap. */
     private const RESTORE = [
-        'categories' => [],
-        'buckets' => [],
+        'category_groups' => [],
+        'categories' => ['category_group_id' => 'category_groups'],
         'accounts' => [],
         'financial_positions' => [],
         'household_plans' => [],
-        'transactions' => ['account_id' => 'accounts', 'category_id' => 'categories', 'bucket_id' => 'buckets'],
+        'category_budget_plans' => ['category_id' => 'categories'],
+        'category_rollover_settings' => ['category_id' => 'categories'],
+        'category_budget_moves' => ['from_category_id' => 'categories', 'to_category_id' => 'categories'],
+        'transactions' => ['account_id' => 'accounts', 'category_id' => 'categories'],
         'contribution_phases' => ['household_plan_id' => 'household_plans'],
-        'transaction_splits' => ['transaction_id' => 'transactions', 'category_id' => 'categories', 'bucket_id' => 'buckets'],
+        'transaction_splits' => ['transaction_id' => 'transactions', 'category_id' => 'categories'],
         'valuations' => ['financial_position_id' => 'financial_positions'],
-        'goals' => ['linked_account_id' => 'accounts', 'linked_bucket_id' => 'buckets', 'linked_position_id' => 'financial_positions'],
+        'goals' => ['linked_account_id' => 'accounts', 'linked_category_id' => 'categories', 'payment_category_id' => 'categories', 'linked_position_id' => 'financial_positions'],
         'holdings' => ['account_id' => 'accounts'],
         'scenarios' => [],
     ];
@@ -153,7 +158,7 @@ class PortabilityService
         DB::table('valuations')->whereIn('financial_position_id', $positionIds)->delete();
         DB::table('contribution_phases')->whereIn('household_plan_id', $planIds)->delete();
 
-        foreach (['transactions', 'goals', 'holdings', 'scenarios', 'financial_positions', 'household_plans', 'accounts', 'buckets', 'categories'] as $table) {
+        foreach (['transactions', 'goals', 'holdings', 'scenarios', 'category_budget_moves', 'financial_positions', 'household_plans', 'accounts', 'categories', 'category_groups'] as $table) {
             DB::table($table)->where('household_id', $household->id)->delete();
         }
     }

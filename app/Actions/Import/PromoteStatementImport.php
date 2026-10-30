@@ -9,7 +9,9 @@ use App\Models\Transaction;
 use App\Models\TransactionSplit;
 use App\Models\User;
 use App\Services\Transaction\TransactionService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
@@ -58,6 +60,10 @@ class PromoteStatementImport
 
     private function isValid(StagedTransaction $row): bool
     {
+        if ($row->transfer_pair_id !== null && ! $this->confirmedCounterpartExists($row)) {
+            return false;
+        }
+
         if (! $row->is_split) {
             return true;
         }
@@ -93,6 +99,7 @@ class PromoteStatementImport
                 'source' => $source,
                 'import_batch_id' => $upload->id,
                 'external_id' => $row->external_id,
+                'transfer_pair_id' => $row->transfer_pair_id,
                 'created_by_user_id' => $user->id,
                 'cleared' => false,
             ]);
@@ -114,12 +121,61 @@ class PromoteStatementImport
                 'category_id' => $row->final_category_id,
                 'bucket_id' => $row->final_bucket_id,
                 'amount' => $row->amount,
+                'transfer_pair_id' => $row->transfer_pair_id,
                 'source' => $source,
                 'import_batch_id' => $upload->id,
                 'external_id' => $row->external_id,
             ], $user, $household);
         }
 
+        if ($row->transfer_match_transaction_id !== null && $row->transfer_pair_id !== null) {
+            $paired = Transaction::query()
+                ->whereKey($row->transfer_match_transaction_id)
+                ->where('household_id', $household->id)
+                ->whereNull('transfer_pair_id')
+                ->update(['transfer_pair_id' => $row->transfer_pair_id]);
+
+            if ($paired !== 1) {
+                throw ValidationException::withMessages([
+                    'transfer_match' => __('The confirmed transfer match is no longer available.'),
+                ]);
+            }
+        }
+
         $row->update(['status' => 'promoted', 'transaction_id' => $transaction->id]);
+    }
+
+    private function confirmedCounterpartExists(StagedTransaction $row): bool
+    {
+        $row->loadMissing('statementUpload');
+        $householdId = $row->statementUpload?->household_id;
+
+        if ($householdId === null) {
+            return false;
+        }
+
+        if ($row->transfer_match_staged_transaction_id !== null) {
+            return StagedTransaction::query()
+                ->whereKey($row->transfer_match_staged_transaction_id)
+                ->where('transfer_pair_id', $row->transfer_pair_id)
+                ->whereIn('status', ['pending', 'promoted'])
+                ->whereHas('statementUpload', function (Builder $query) use ($householdId): void {
+                    $query->where('household_id', $householdId);
+                })
+                ->exists();
+        }
+
+        if ($row->transfer_match_transaction_id !== null) {
+            return Transaction::query()
+                ->whereKey($row->transfer_match_transaction_id)
+                ->where('household_id', $householdId)
+                ->where(function (Builder $query) use ($row): void {
+                    $query->whereNull('transfer_pair_id')
+                        ->orWhere('transfer_pair_id', $row->transfer_pair_id);
+                })
+                ->exists();
+        }
+
+        return false;
     }
 }

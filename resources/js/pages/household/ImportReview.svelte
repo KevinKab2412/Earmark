@@ -55,6 +55,16 @@
         memo: string | null;
     };
 
+    type TransferMatch = {
+        id: string;
+        type: 'staged' | 'transaction';
+        date: string;
+        payee: string;
+        amount: number;
+        account: string;
+        days_apart: number;
+    };
+
     type ServerRow = {
         id: string;
         date: string;
@@ -69,6 +79,10 @@
         is_split: boolean;
         final_category_id: string | null;
         final_bucket_id: string | null;
+        transfer_pair_id: string | null;
+        transfer_match_staged_transaction_id: string | null;
+        transfer_match_transaction_id: string | null;
+        transfer_matches: TransferMatch[];
         splits: ServerSplit[];
     };
 
@@ -89,6 +103,10 @@
         bucketId: string;
         isSplit: boolean;
         splits: EditSplit[];
+        transferMatches: TransferMatch[];
+        transferMatchType: 'staged' | 'transaction' | '';
+        transferMatchId: string;
+        transferDismissed: boolean;
     };
 
     let {
@@ -133,11 +151,22 @@
                 amount: split.amount,
                 memo: split.memo ?? '',
             })),
+            transferMatches: row.transfer_matches ?? [],
+            transferMatchType: row.transfer_match_staged_transaction_id
+                ? 'staged'
+                : row.transfer_match_transaction_id
+                  ? 'transaction'
+                  : '',
+            transferMatchId:
+                row.transfer_match_staged_transaction_id ?? row.transfer_match_transaction_id ?? '',
+            transferDismissed: false,
         };
     }
 
     function signature(serverRows: ServerRow[]): string {
-        return serverRows.map((row) => `${row.id}:${row.status}`).join('|');
+        return serverRows
+            .map((row) => `${row.id}:${row.status}:${row.transfer_pair_id}`)
+            .join('|');
     }
 
     let editRows = $state<EditRow[]>(untrack(() => rows.map(toEdit)));
@@ -162,7 +191,29 @@
         return row.splits.reduce((total, split) => total + (Number(split.amount) || 0), 0);
     }
 
+    function clearTransferMatch(row: EditRow): void {
+        row.transferMatchType = '';
+        row.transferMatchId = '';
+    }
+
+    function chooseTransferMatch(row: EditRow, match: TransferMatch): void {
+        row.transferMatchType = match.type;
+        row.transferMatchId = match.id;
+        row.transferDismissed = false;
+        row.isSplit = false;
+        row.splits = [];
+    }
+
+    function dismissTransferSuggestions(row: EditRow): void {
+        clearTransferMatch(row);
+        row.transferDismissed = true;
+    }
+
     function toggleSplit(row: EditRow): void {
+        if (!row.isSplit && row.transferMatchId) {
+            clearTransferMatch(row);
+        }
+
         row.isSplit = !row.isSplit;
 
         if (row.isSplit && row.splits.length === 0) {
@@ -190,6 +241,7 @@
         if (row.status === 'rejected') {
             row.status = 'pending';
         } else {
+            clearTransferMatch(row);
             row.status = 'rejected';
             row.accept = false;
         }
@@ -234,6 +286,8 @@
             final_bucket_id: row.isSplit ? null : row.bucketId || null,
             accept: row.accept,
             status: row.status,
+            transfer_match_type: row.transferMatchId ? row.transferMatchType : null,
+            transfer_match_id: row.transferMatchId || null,
             splits: row.isSplit
                 ? row.splits.map((split) => ({
                       bucket_id: split.bucket_id,
@@ -473,6 +527,73 @@
                         <p class="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900">
                             Possible duplicate: {row.duplicateReason}
                         </p>
+                    {/if}
+
+                    {#if row.transferMatchId}
+                        <div
+                            class="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3"
+                            data-test="confirmed-transfer-match"
+                        >
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-sm font-medium text-emerald-900">Transfer match selected</p>
+                                    <p class="text-xs text-emerald-800">
+                                        Save to confirm the pair. Removing the match leaves both transactions unpaired.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onclick={() => clearTransferMatch(row)}
+                                    data-test="reject-transfer-match"
+                                >
+                                    Remove match
+                                </Button>
+                            </div>
+                        </div>
+                    {:else if !row.transferDismissed && row.transferMatches.length > 0}
+                        <div class="rounded-lg border p-3" data-test="transfer-match-suggestions">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-sm font-medium">Possible transfer matches</p>
+                                    <p class="mt-0.5 text-xs text-muted-foreground">
+                                        Same amount in another account within three days. Nothing is paired until you confirm.
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onclick={() => dismissTransferSuggestions(row)}
+                                    data-test="dismiss-transfer-match"
+                                >
+                                    Not a transfer
+                                </Button>
+                            </div>
+                            <div class="mt-2 flex flex-col gap-2">
+                                {#each row.transferMatches as match (`${match.type}-${match.id}`)}
+                                    <div class="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/40 p-2">
+                                        <div class="min-w-0 text-sm">
+                                            <p class="truncate font-medium">{match.payee} · {match.account}</p>
+                                            <p class="text-xs text-muted-foreground">
+                                                {match.date} · {formatCents(Math.abs(match.amount))} · {match.days_apart}
+                                                day{match.days_apart === 1 ? '' : 's'} apart
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onclick={() => chooseTransferMatch(row, match)}
+                                            data-test="confirm-transfer-match"
+                                        >
+                                            Use this match
+                                        </Button>
+                                    </div>
+                                {/each}
+                            </div>
+                        </div>
                     {/if}
 
                     <div class="flex items-baseline justify-between gap-3">

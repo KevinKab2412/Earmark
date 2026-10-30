@@ -12,7 +12,6 @@ function ownerTransaction(User $user, array $attributes = []): Transaction
         'household_id' => $household->id,
         'account_id' => Account::factory()->create(['household_id' => $household->id])->id,
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ], $attributes));
 }

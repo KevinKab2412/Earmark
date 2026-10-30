@@ -21,7 +21,7 @@ class TransactionRegisterService
     {
         $query = Transaction::query()
             ->where('household_id', $household->id)
-            ->with(['account', 'category', 'bucket', 'reviewAssignee'])
+            ->with(['account', 'category', 'reviewAssignee'])
             ->whereNull('transfer_pair_id');
 
         if (! empty($filters['assignee_id'])) {
@@ -42,10 +42,6 @@ class TransactionRegisterService
 
         if (! empty($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
-        }
-
-        if (! empty($filters['bucket_id'])) {
-            $query->where('bucket_id', $filters['bucket_id']);
         }
 
         if (! empty($filters['source'])) {

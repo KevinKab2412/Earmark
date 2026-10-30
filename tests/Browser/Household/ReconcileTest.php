@@ -17,7 +17,6 @@ it('reconciles an account when the cleared balance matches', function () {
         'cleared' => true,
         'date' => '2026-06-01',
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ]);
 

@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Household;
 use App\Concerns\ResolvesHousehold;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Household\SaveReportRequest;
-use App\Models\Bucket;
+use App\Models\Category;
 use App\Models\Household;
 use App\Models\SavedReport;
-use App\Services\Budget\BudgetService;
+use App\Services\CategoryBudgetService;
 use App\Services\NetWorth\SnapshotService;
 use App\Services\Reporting\ReportingService;
 use App\Support\Money;
@@ -26,7 +26,7 @@ class ReportController extends Controller
 
     public function __construct(
         private ReportingService $reporting,
-        private BudgetService $budget,
+        private CategoryBudgetService $budget,
         private SnapshotService $snapshot,
     ) {}
 
@@ -51,7 +51,7 @@ class ReportController extends Controller
                     'filters' => $report->filters,
                 ]),
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->whereIn('direction', ['income', 'expense'])->orderBy('name')->get(['id', 'name']),
             'types' => self::TYPES,
         ]);
     }
@@ -175,14 +175,17 @@ class ReportController extends Controller
      */
     private function budgetRows(Household $household, array $filters): array
     {
-        return $household->buckets()->where('archived', false)->where('kind', '!=', 'system')->orderBy('name')->get()
-            ->map(function (Bucket $bucket) use ($filters): array {
-                $available = $this->budget->availableForMonth($bucket, $filters['year'], $filters['month']);
-                $obligation = $this->budget->obligationForMonth($bucket, $filters['year'], $filters['month']);
+        return $household->categories()
+            ->where('archived', false)
+            ->whereIn('direction', ['income', 'expense'])
+            ->orderBy('name')
+            ->get()
+            ->map(function (Category $category) use ($filters): array {
+                $summary = $this->budget->summaryForMonth($category, $filters['year'], $filters['month']);
 
                 return [
-                    'label' => $bucket->name,
-                    'value' => Money::format($available - $obligation).' variance',
+                    'label' => $category->name,
+                    'value' => Money::format($summary['available']),
                 ];
             })->all();
     }
@@ -204,7 +207,7 @@ class ReportController extends Controller
         }
 
         if ($type === 'budget') {
-            return [['Bucket', 'Variance'], collect($this->budgetRows($household, $filters))->map(fn (array $r): array => [$r['label'], $r['value']])->all()];
+            return [['Category', 'Available'], collect($this->budgetRows($household, $filters))->map(fn (array $r): array => [$r['label'], $r['value']])->all()];
         }
 
         return [['Date', 'Account', 'Payee', 'Category', 'Amount'], collect($this->reporting->drilldown($household, $filters))->map(fn (array $r): array => [

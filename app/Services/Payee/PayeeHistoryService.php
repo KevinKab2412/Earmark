@@ -7,7 +7,7 @@ use App\Models\Transaction;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Suggests a category/bucket for an imported payee from the household's own history:
+ * Suggests a category for an imported payee from the household's own history:
  * the most recent ledger transaction that was categorized for the same payee. This
  * complements explicit payee rules (#1270) — rules are the deliberate override, this
  * covers every payee the user categorized once by hand but never wrote a rule for.
@@ -18,12 +18,12 @@ use Illuminate\Support\Facades\DB;
 class PayeeHistoryService
 {
     /**
-     * Build a lookup of the most recently used category/bucket for each given payee.
+     * Build a lookup of the most recently used category for each given payee.
      * Only categorized transactions contribute; the `category_id` filter naturally
      * excludes split parents and transfers, which carry no category of their own.
      *
      * @param  list<string>  $payees
-     * @return array<string, array{category_id: ?string, bucket_id: ?string}>
+     * @return array<string, array{category_id: ?string}>
      */
     public function mapFor(array $payees, Household $household): array
     {
@@ -43,7 +43,7 @@ class PayeeHistoryService
             ->whereIn(DB::raw('lower(trim(payee))'), $keys->all())
             ->orderByDesc('date')
             ->orderByDesc('created_at')
-            ->get(['payee', 'category_id', 'bucket_id']);
+            ->get(['payee', 'category_id']);
 
         $map = [];
 
@@ -54,7 +54,6 @@ class PayeeHistoryService
             if (! isset($map[$key])) {
                 $map[$key] = [
                     'category_id' => $transaction->category_id,
-                    'bucket_id' => $transaction->bucket_id,
                 ];
             }
         }

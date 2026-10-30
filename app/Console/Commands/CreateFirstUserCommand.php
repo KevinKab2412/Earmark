@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Actions\Households\CreateHousehold;
 use App\Models\User;
-use Database\Seeders\BucketSeeder;
+use Database\Seeders\CategoryGroupSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -18,7 +18,7 @@ class CreateFirstUserCommand extends Command
 
     protected $description = 'Bootstrap the first household by creating a verified user and attached household. Refuses to run if any users already exist.';
 
-    public function handle(BucketSeeder $bucketSeeder): int
+    public function handle(CategoryGroupSeeder $categoryGroupSeeder): int
     {
         if (User::query()->exists()) {
             $this->error('Refusing to run: at least one user already exists. Use the invite-link flow to add more users.');
@@ -55,7 +55,7 @@ class CreateFirstUserCommand extends Command
         $user->forceFill(['email_verified_at' => now()])->save();
 
         $household = CreateHousehold::run($user, "{$name}'s Household");
-        $bucketSeeder->run($household);
+        $categoryGroupSeeder->run($household);
 
         $this->info("Created user {$user->email} (id={$user->id}) and household '{$household->name}' (id={$household->id}). Email pre-verified.");
 

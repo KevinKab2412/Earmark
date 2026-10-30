@@ -1,38 +1,42 @@
 <?php
 
-use App\Models\Bucket;
+use App\Models\Account;
+use App\Models\Transaction;
 
-it('shows unassigned funds, underfunded buckets, and net worth cards', function () {
+it('shows category budgeting and net worth cards', function () {
     actingAsOwner();
 
     visit('/household/dashboard')
-        ->assertSee('Unassigned Funds')
-        ->assertSee('Underfunded buckets')
-        ->assertSee('Every bucket has enough for this month')
+        ->assertSee('Planned')
+        ->assertSee('Available')
+        ->assertSee('Over budget categories')
         ->assertSee('Investable assets')
         ->assertSee('Total net worth')
         ->assertSee('Target gap')
         ->assertSee('Add first financial position');
 });
 
-it('lists underfunded buckets and opens the plan from overview', function () {
+it('lists overspent categories and opens the plan from overview', function () {
     $this->travelTo('2026-09-07 12:00:00');
 
     $user = actingAsOwner();
-
-    Bucket::factory()->create([
-        'household_id' => $user->household()->id,
-        'name' => 'Rent',
-        'kind' => 'ongoing',
-        'monthly_obligation' => 150000,
+    $household = $user->household();
+    $account = Account::factory()->create(['household_id' => $household->id]);
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $category->id,
+        'amount' => -15000,
+        'date' => '2026-09-07',
+        'created_by_user_id' => $user->id,
     ]);
 
     visit('/household/dashboard')
-        ->assertSee('Rent')
-        ->assertSee('Needs more this month')
+        ->assertSee('Groceries')
         ->click('Open Plan')
         ->assertPathIs('/household/plan')
-        ->assertSee('Underfunded');
+        ->assertSee('Groceries');
 });
 
 it('opens accounts from the overview shortcuts', function () {

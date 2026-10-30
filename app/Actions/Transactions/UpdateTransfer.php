@@ -18,7 +18,7 @@ class UpdateTransfer
     use AsAction;
 
     /**
-     * @param  array{date: string, from_account_id: string, to_account_id: string, amount: int, memo: ?string}  $data
+     * @param  array{date: string, from_account_id: string, to_account_id: string, category_id: string, amount: int, memo: ?string}  $data
      */
     public function handle(Transaction $outflow, array $data, User $user): void
     {
@@ -40,6 +40,7 @@ class UpdateTransfer
                 'date' => $data['date'],
                 'account_id' => $data['from_account_id'],
                 'amount' => -$data['amount'],
+                'category_id' => $data['category_id'],
                 'memo' => $data['memo'] ?? null,
             ]);
 
@@ -47,6 +48,7 @@ class UpdateTransfer
                 'date' => $data['date'],
                 'account_id' => $data['to_account_id'],
                 'amount' => $data['amount'],
+                'category_id' => $data['category_id'],
                 'memo' => $data['memo'] ?? null,
             ]);
         });

@@ -1,130 +1,74 @@
 <?php
 
-use App\Models\Account;
-use App\Models\Bucket;
-use App\Models\Transaction;
+use App\Models\Category;
+use App\Models\CategoryBudgetMove;
+use App\Models\CategoryBudgetPlan;
 use App\Models\User;
-use App\Services\Budget\BudgetService;
+use App\Services\CategoryBudgetService;
 
-function unassignedBucket(User $user): Bucket
-{
-    return Bucket::query()
-        ->where('household_id', $user->household()->id)
-        ->where('name', Bucket::UNASSIGNED_FUNDS)
-        ->sole();
-}
-
-test('assigning funds moves money between buckets and conserves every cent', function () {
+test('a user can move planned funds from one category to another', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $unassigned = unassignedBucket($user);
-    $food = Bucket::factory()->create(['household_id' => $household->id, 'kind' => 'ongoing', 'monthly_obligation' => 0]);
-    $account = Account::factory()->create(['household_id' => $household->id]);
-
-    // Income lands in Unassigned Funds.
-    Transaction::factory()->create([
+    $source = Category::factory()->create([
         'household_id' => $household->id,
-        'account_id' => $account->id,
-        'bucket_id' => $unassigned->id,
-        'amount' => 10000,
-        'date' => '2026-06-01',
-        'created_by_user_id' => $user->id,
+        'name' => 'Move Source',
+        'created_at' => now()->startOfMonth(),
+    ]);
+    $destination = Category::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Move Destination',
+        'created_at' => now()->startOfMonth(),
+    ]);
+    CategoryBudgetPlan::query()->create([
+        'category_id' => $source->id,
+        'effective_month' => now()->startOfMonth()->toDateString(),
+        'planned_amount' => 10000,
     ]);
 
     $this->actingAs($user)
-        ->post(route('household.plan.assign'), [
-            'from_bucket_id' => $unassigned->id,
-            'to_bucket_id' => $food->id,
-            'amount' => 4000,
-            'year' => 2026,
-            'month' => 6,
+        ->post(route('household.plan.move'), [
+            'from_category_id' => $source->id,
+            'to_category_id' => $destination->id,
+            'amount' => '40.00',
+            'year' => now()->year,
+            'month' => now()->month,
+            'memo' => 'Cover dining',
         ])
+        ->assertRedirect(route('household.plan.index', ['year' => now()->year, 'month' => now()->month]))
         ->assertSessionHasNoErrors();
 
-    $budget = app(BudgetService::class);
+    $budget = app(CategoryBudgetService::class);
 
-    expect($budget->availableForMonth($food, 2026, 6))->toBe(4000)
-        ->and($budget->availableForMonth($unassigned, 2026, 6))->toBe(6000)
-        // Conservation: total available across both buckets equals the income.
-        ->and($budget->availableForMonth($food, 2026, 6) + $budget->availableForMonth($unassigned, 2026, 6))->toBe(10000);
+    expect(CategoryBudgetMove::query()->where('household_id', $household->id)->count())->toBe(1)
+        ->and($budget->availableForMonth($source, now()->year, now()->month))->toBe(6000)
+        ->and($budget->availableForMonth($destination, now()->year, now()->month))->toBe(4000)
+        ->and($budget->availableForMonth($source, now()->year, now()->month) + $budget->availableForMonth($destination, now()->year, now()->month))->toBe(10000);
 });
 
-test('assignments carry forward into future months', function () {
+test('a category cannot receive a move from itself or another household', function () {
     $user = User::factory()->create();
-    $household = $user->household();
-    $unassigned = unassignedBucket($user);
-    $food = Bucket::factory()->create(['household_id' => $household->id, 'kind' => 'ongoing', 'monthly_obligation' => 0]);
-
-    $this->actingAs($user)->post(route('household.plan.assign'), [
-        'from_bucket_id' => $unassigned->id,
-        'to_bucket_id' => $food->id,
-        'amount' => 5000,
-        'year' => 2026,
-        'month' => 6,
-    ]);
-
-    $budget = app(BudgetService::class);
-
-    expect($budget->availableForMonth($food, 2026, 7))->toBe(5000);
-});
-
-test('an effective-dated obligation change does not rewrite prior months', function () {
-    $user = User::factory()->create();
-    $household = $user->household();
-    $food = Bucket::factory()->create(['household_id' => $household->id, 'kind' => 'ongoing', 'monthly_obligation' => 0]);
-
-    $this->actingAs($user)
-        ->post(route('household.plan.buckets.obligation', $food), [
-            'monthly_obligation' => 20000,
-            'effective_year' => 2026,
-            'effective_month' => 6,
-        ])
-        ->assertSessionHasNoErrors();
-
-    $budget = app(BudgetService::class);
-
-    expect($budget->obligationForMonth($food, 2026, 5))->toBe(0)      // prior month unchanged
-        ->and($budget->obligationForMonth($food, 2026, 6))->toBe(20000) // effective onwards
-        ->and($budget->obligationForMonth($food, 2026, 7))->toBe(20000);
-});
-
-test('assigning to the same bucket is rejected', function () {
-    $user = User::factory()->create();
-    $food = Bucket::factory()->create(['household_id' => $user->household()->id]);
+    $source = Category::factory()->create(['household_id' => $user->household()->id]);
+    $other = Category::factory()->create();
 
     $this->actingAs($user)
         ->from(route('household.plan.index'))
-        ->post(route('household.plan.assign'), [
-            'from_bucket_id' => $food->id,
-            'to_bucket_id' => $food->id,
-            'amount' => 1000,
-            'year' => 2026,
-            'month' => 6,
+        ->post(route('household.plan.move'), [
+            'from_category_id' => $source->id,
+            'to_category_id' => $source->id,
+            'amount' => '10.00',
+            'year' => now()->year,
+            'month' => now()->month,
         ])
-        ->assertSessionHasErrors('to_bucket_id');
-});
-
-test('a user cannot assign to or set obligations on another household bucket', function () {
-    $user = User::factory()->create();
-    $mine = Bucket::factory()->create(['household_id' => $user->household()->id]);
-    $other = Bucket::factory()->create();
+        ->assertSessionHasErrors('to_category_id');
 
     $this->actingAs($user)
         ->from(route('household.plan.index'))
-        ->post(route('household.plan.assign'), [
-            'from_bucket_id' => $mine->id,
-            'to_bucket_id' => $other->id,
-            'amount' => 1000,
-            'year' => 2026,
-            'month' => 6,
+        ->post(route('household.plan.move'), [
+            'from_category_id' => $source->id,
+            'to_category_id' => $other->id,
+            'amount' => '10.00',
+            'year' => now()->year,
+            'month' => now()->month,
         ])
-        ->assertSessionHasErrors('to_bucket_id');
-
-    $this->actingAs($user)
-        ->post(route('household.plan.buckets.obligation', $other), [
-            'monthly_obligation' => 100,
-            'effective_year' => 2026,
-            'effective_month' => 6,
-        ])
-        ->assertForbidden();
+        ->assertSessionHasErrors('to_category_id');
 });

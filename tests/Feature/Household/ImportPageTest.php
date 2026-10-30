@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\PayeeRule;
 use App\Models\StatementUpload;
@@ -153,12 +152,10 @@ test('payee rules seed the staged suggestion', function () {
     $household = $user->household();
     $account = Account::factory()->create(['household_id' => $household->id]);
     $category = Category::factory()->create(['household_id' => $household->id]);
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
     PayeeRule::factory()->create([
         'household_id' => $household->id,
         'pattern' => 'loblaws',
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
     ]);
 
     $this->actingAs($user)
@@ -170,6 +167,5 @@ test('payee rules seed the staged suggestion', function () {
     $this->assertDatabaseHas('staged_transactions', [
         'payee' => 'LOBLAWS #5025',
         'suggested_category_id' => $category->id,
-        'suggested_bucket_id' => $bucket->id,
     ]);
 });

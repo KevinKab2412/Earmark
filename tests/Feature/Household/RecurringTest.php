@@ -20,7 +20,6 @@ function recurringHistory(User $user, string $payee, array $dates, int $amount =
             'date' => $date,
             'reviewed' => true,
             'category_id' => null,
-            'bucket_id' => null,
             'created_by_user_id' => $user->id,
         ]);
     }

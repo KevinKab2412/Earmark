@@ -21,16 +21,16 @@ class UpdateTransaction
     public function __construct(private TransactionActivityLogger $activity) {}
 
     /**
-     * @param  array{date: string, account_id: string, payee: string, category_id: ?string, bucket_id: ?string, amount: int, memo: ?string, cleared: bool, reviewed: bool}  $data
+     * @param  array{date: string, account_id: string, payee: string, category_id: ?string, amount: int, memo: ?string, cleared: bool, reviewed: bool}  $data
      */
     public function handle(Transaction $transaction, array $data, User $user): Transaction
     {
         $original = $transaction->only([
-            'date', 'account_id', 'payee', 'category_id', 'bucket_id', 'amount', 'memo', 'cleared', 'reviewed',
+            'date', 'account_id', 'payee', 'category_id', 'amount', 'memo', 'cleared', 'reviewed',
         ]);
 
         if ($transaction->is_split) {
-            unset($data['amount'], $data['category_id'], $data['bucket_id']);
+            unset($data['amount'], $data['category_id']);
         }
 
         $transaction->fill($data)->save();
@@ -56,7 +56,6 @@ class UpdateTransaction
             'account_id' => 'account',
             'payee' => 'payee',
             'category_id' => 'category',
-            'bucket_id' => 'bucket',
             'amount' => 'amount',
             'memo' => 'memo',
             'cleared' => 'cleared',

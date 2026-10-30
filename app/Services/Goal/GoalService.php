@@ -4,26 +4,26 @@ namespace App\Services\Goal;
 
 use App\Models\Goal;
 use App\Models\Transaction;
-use App\Services\Budget\BudgetService;
+use App\Services\CategoryBudgetService;
 use Carbon\CarbonImmutable;
 
 /**
  * Grounds goal progress in canonical balances. A save-up goal's current amount
- * comes only from a linked bucket, account, or position balance; a debt goal's
+ * comes from a linked category balance; a debt goal's
  * remaining principal comes from a linked liability position or a stored figure.
  * Nothing here writes to the ledger, and transfers are never treated as
  * spending (task #1254).
  */
 class GoalService
 {
-    public function __construct(private BudgetService $budget) {}
+    public function __construct(private CategoryBudgetService $budget) {}
 
     public function currentAmount(Goal $goal): int
     {
-        if ($goal->linked_bucket_id !== null && $goal->bucket !== null) {
+        if ($goal->linked_category_id !== null && $goal->category !== null) {
             $now = CarbonImmutable::now();
 
-            return $this->budget->availableForMonth($goal->bucket, $now->year, $now->month);
+            return $this->budget->availableForMonth($goal->category, $now->year, $now->month);
         }
 
         if ($goal->linked_account_id !== null && $goal->account !== null) {
@@ -64,6 +64,12 @@ class GoalService
             if ($amount !== null) {
                 return abs($amount);
             }
+        }
+
+        if ($goal->linked_account_id !== null && $goal->account !== null) {
+            $movements = (int) Transaction::query()->where('account_id', $goal->account->id)->sum('amount');
+
+            return abs($goal->account->starting_balance + $movements);
         }
 
         return abs($goal->principal ?? 0);

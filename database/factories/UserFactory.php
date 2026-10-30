@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Actions\Households\CreateHousehold;
 use App\Models\User;
-use Database\Seeders\BucketSeeder;
+use Database\Seeders\CategoryGroupSeeder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -46,7 +46,7 @@ class UserFactory extends Factory
             }
 
             $household = CreateHousehold::run($user, "{$user->name}'s Household");
-            app(BucketSeeder::class)->run($household);
+            app(CategoryGroupSeeder::class)->run($household);
         });
     }
 

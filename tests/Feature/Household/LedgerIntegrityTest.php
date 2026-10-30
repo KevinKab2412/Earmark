@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
+use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -17,7 +17,6 @@ function integrityTransaction(User $user, array $attributes = []): Transaction
         'household_id' => $household->id,
         'account_id' => Account::factory()->create(['household_id' => $household->id])->id,
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ], $attributes));
 }
@@ -25,16 +24,16 @@ function integrityTransaction(User $user, array $attributes = []): Transaction
 test('a transaction can be split into allocations that sum to the parent', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $a = Bucket::factory()->create(['household_id' => $household->id]);
-    $b = Bucket::factory()->create(['household_id' => $household->id]);
+    $a = Category::factory()->create(['household_id' => $household->id]);
+    $b = Category::factory()->create(['household_id' => $household->id]);
     $transaction = integrityTransaction($user, ['amount' => -10000]);
 
     $this->actingAs($user)
         ->from(route('household.transactions.index'))
         ->post(route('household.transactions.split', $transaction), [
             'splits' => [
-                ['bucket_id' => $a->id, 'category_id' => null, 'amount' => -6000, 'memo' => null],
-                ['bucket_id' => $b->id, 'category_id' => null, 'amount' => -4000, 'memo' => 'rest'],
+                ['category_id' => $a->id, 'amount' => -6000, 'memo' => null],
+                ['category_id' => $b->id, 'amount' => -4000, 'memo' => 'rest'],
             ],
         ])
         ->assertSessionHasNoErrors();
@@ -48,13 +47,13 @@ test('a transaction can be split into allocations that sum to the parent', funct
 
 test('splits that do not sum to the parent are rejected', function () {
     $user = User::factory()->create();
-    $bucket = Bucket::factory()->create(['household_id' => $user->household()->id]);
+    $category = Category::factory()->create(['household_id' => $user->household()->id]);
     $transaction = integrityTransaction($user, ['amount' => -10000]);
 
     $this->actingAs($user)
         ->from(route('household.transactions.index'))
         ->post(route('household.transactions.split', $transaction), [
-            'splits' => [['bucket_id' => $bucket->id, 'category_id' => null, 'amount' => -6000, 'memo' => null]],
+            'splits' => [['category_id' => $category->id, 'amount' => -6000, 'memo' => null]],
         ])
         ->assertSessionHasErrors('splits');
 
@@ -63,9 +62,9 @@ test('splits that do not sum to the parent are rejected', function () {
 
 test('clearing the split removes the children', function () {
     $user = User::factory()->create();
-    $bucket = Bucket::factory()->create(['household_id' => $user->household()->id]);
+    $category = Category::factory()->create(['household_id' => $user->household()->id]);
     $transaction = integrityTransaction($user, ['amount' => -5000, 'is_split' => true]);
-    $transaction->splits()->create(['bucket_id' => $bucket->id, 'amount' => -5000]);
+    $transaction->splits()->create(['category_id' => $category->id, 'amount' => -5000]);
 
     $this->actingAs($user)
         ->from(route('household.transactions.index'))
@@ -78,12 +77,12 @@ test('clearing the split removes the children', function () {
 
 test('a transfer cannot be split', function () {
     $user = User::factory()->create();
-    $bucket = Bucket::factory()->create(['household_id' => $user->household()->id]);
+    $category = Category::factory()->create(['household_id' => $user->household()->id]);
     $transfer = integrityTransaction($user, ['amount' => -5000, 'transfer_pair_id' => Str::ulid()]);
 
     $this->actingAs($user)
         ->post(route('household.transactions.split', $transfer), [
-            'splits' => [['bucket_id' => $bucket->id, 'category_id' => null, 'amount' => -5000, 'memo' => null]],
+            'splits' => [['category_id' => $category->id, 'amount' => -5000, 'memo' => null]],
         ])
         ->assertForbidden();
 });
@@ -93,11 +92,13 @@ test('a transfer pair can be edited and stays balanced', function () {
     $household = $user->household();
     $from = Account::factory()->create(['household_id' => $household->id]);
     $to = Account::factory()->create(['household_id' => $household->id]);
+    $categoryId = $household->categories()->where('name', 'Transfer')->value('id');
 
     $this->actingAs($user)->post(route('household.transfers.store'), [
         'date' => '2026-06-01',
         'from_account_id' => $from->id,
         'to_account_id' => $to->id,
+        'category_id' => $categoryId,
         'amount' => 5000,
     ]);
 
@@ -108,6 +109,7 @@ test('a transfer pair can be edited and stays balanced', function () {
             'date' => '2026-06-05',
             'from_account_id' => $from->id,
             'to_account_id' => $to->id,
+            'category_id' => $categoryId,
             'amount' => 8000,
         ])
         ->assertRedirect(route('household.transfers.index'));
@@ -125,16 +127,17 @@ test('a transfer edit to the same account is rejected', function () {
     $household = $user->household();
     $from = Account::factory()->create(['household_id' => $household->id]);
     $to = Account::factory()->create(['household_id' => $household->id]);
+    $categoryId = $household->categories()->where('name', 'Transfer')->value('id');
 
     $this->actingAs($user)->post(route('household.transfers.store'), [
-        'date' => '2026-06-01', 'from_account_id' => $from->id, 'to_account_id' => $to->id, 'amount' => 5000,
+        'date' => '2026-06-01', 'from_account_id' => $from->id, 'to_account_id' => $to->id, 'category_id' => $categoryId, 'amount' => 5000,
     ]);
     $out = Transaction::query()->whereNotNull('transfer_pair_id')->where('amount', '<', 0)->sole();
 
     $this->actingAs($user)
         ->from(route('household.transfers.index'))
         ->patch(route('household.transfers.update', $out), [
-            'date' => '2026-06-05', 'from_account_id' => $from->id, 'to_account_id' => $from->id, 'amount' => 8000,
+            'date' => '2026-06-05', 'from_account_id' => $from->id, 'to_account_id' => $from->id, 'category_id' => $categoryId, 'amount' => 8000,
         ])
         ->assertSessionHasErrors('to_account_id');
 });

@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\Bucket;
+use App\Models\Category;
 use App\Models\Household;
 use App\Models\User;
 
@@ -27,7 +27,7 @@ test('creates first user and household when no users exist', function () {
     $household = $user->household();
     expect($household)->not->toBeNull();
     expect($user->ownsHousehold($household))->toBeTrue();
-    expect(Bucket::query()->where('household_id', $household->id)->where('name', Bucket::UNASSIGNED_FUNDS)->exists())->toBeTrue();
+    expect(Category::query()->where('household_id', $household->id)->where('name', 'Transfer')->exists())->toBeTrue();
 });
 
 test('refuses to run when any user already exists', function () {

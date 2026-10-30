@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -83,7 +82,6 @@ test('the register paginates', function () {
 test('a transaction can be edited and the change is recorded', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
     $transaction = ledgerTransaction($user, ['payee' => 'Original', 'amount' => -1000]);
 
     $this->actingAs($user)
@@ -93,7 +91,6 @@ test('a transaction can be edited and the change is recorded', function () {
             'account_id' => $transaction->account_id,
             'payee' => 'Corrected',
             'category_id' => null,
-            'bucket_id' => $bucket->id,
             'amount' => -8000,
             'memo' => 'fixed',
             'cleared' => true,

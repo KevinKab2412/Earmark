@@ -15,7 +15,6 @@ function browserTransaction(User $user, array $attributes = []): Transaction
         'household_id' => $household->id,
         'account_id' => Account::factory()->create(['household_id' => $household->id, 'name' => 'Daily Chequing'])->id,
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ], $attributes));
 }
@@ -46,7 +45,7 @@ it('creates a category inline from the edit modal', function () {
         ->click('@edit-new-category')
         ->assertSee('Create a category')
         ->fill('@new-category-name', 'Salary')
-        ->select('@new-category-type', 'income')
+        ->select('#new-category-direction', 'income')
         ->click('@new-category-save')
         ->assertDontSee('Create a category')
         ->assertNoJavaScriptErrors();
@@ -54,7 +53,7 @@ it('creates a category inline from the edit modal', function () {
     $this->assertDatabaseHas('categories', [
         'household_id' => $user->household()->id,
         'name' => 'Salary',
-        'type' => 'income',
+        'direction' => 'income',
     ]);
 });
 

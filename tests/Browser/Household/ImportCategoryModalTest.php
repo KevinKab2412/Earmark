@@ -25,7 +25,7 @@ it('creates a category from the import review modal', function () {
         ->click('@new-category')
         ->assertSee('Create a category')
         ->fill('@new-category-name', 'Streaming')
-        ->select('@new-category-type', 'personal')
+        ->select('#new-category-direction', 'expense')
         ->click('@new-category-save')
         ->assertDontSee('Create a category') // modal closes once the round-trip succeeds
         ->assertNoJavaScriptErrors();
@@ -33,6 +33,6 @@ it('creates a category from the import review modal', function () {
     $this->assertDatabaseHas('categories', [
         'household_id' => $household->id,
         'name' => 'Streaming',
-        'type' => 'personal',
+        'direction' => 'expense',
     ]);
 });

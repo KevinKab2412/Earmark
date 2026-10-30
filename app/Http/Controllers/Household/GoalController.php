@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Household;
 
+use App\Actions\Categories\SetCategoryRollover;
 use App\Actions\Goals\CreateGoal;
 use App\Actions\Goals\UpdateGoal;
 use App\Concerns\ResolvesHousehold;
@@ -9,7 +10,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Household\ReorderGoalsRequest;
 use App\Http\Requests\Household\StoreGoalRequest;
 use App\Http\Requests\Household\UpdateGoalRequest;
+use App\Models\Category;
 use App\Models\Goal;
+use App\Models\User;
 use App\Services\Goal\GoalService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
@@ -21,7 +24,10 @@ class GoalController extends Controller
 {
     use ResolvesHousehold;
 
-    public function __construct(private GoalService $goals) {}
+    public function __construct(
+        private GoalService $goals,
+        private SetCategoryRollover $setCategoryRollover,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -30,7 +36,7 @@ class GoalController extends Controller
         $goals = Goal::query()
             ->where('household_id', $household->id)
             ->whereIn('status', ['active', 'achieved'])
-            ->with(['account:id,name', 'bucket:id,name', 'position:id,name'])
+            ->with(['account:id,name', 'category:id,name', 'paymentCategory:id,name', 'position:id,name'])
             ->orderBy('sort_order')->orderBy('created_at')
             ->get()
             ->map(function (Goal $goal): array {
@@ -47,9 +53,11 @@ class GoalController extends Controller
                     'required_payment_formatted' => $goal->required_payment !== null ? Money::format($goal->required_payment) : null,
                     'principal' => $goal->principal,
                     'linked_account_id' => $goal->linked_account_id,
-                    'linked_bucket_id' => $goal->linked_bucket_id,
+                    'linked_category_id' => $goal->linked_category_id,
+                    'payment_category_id' => $goal->payment_category_id,
                     'linked_position_id' => $goal->linked_position_id,
-                    'linked_to' => $goal->account?->name ?? $goal->bucket?->name ?? $goal->position?->name,
+                    'linked_to' => $goal->category?->name ?? $goal->account?->name ?? $goal->position?->name,
+                    'payment_category' => $goal->paymentCategory?->name,
                 ];
 
                 if ($goal->type === 'pay_down') {
@@ -84,16 +92,18 @@ class GoalController extends Controller
         return Inertia::render('household/Goals', [
             'goals' => $goals,
             'types' => Goal::TYPES,
-            'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'buckets' => $household->buckets()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'positions' => $household->financialPositions()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->whereIn('direction', ['income', 'expense'])->orderBy('name')->get(['id', 'name']),
+            'paymentCategories' => $household->categories()->where('archived', false)->where('direction', 'expense')->orderBy('name')->get(['id', 'name']),
+            'accounts' => $household->accounts()->where('archived', false)->whereIn('type', ['credit_card', 'mortgage', 'loan'])->orderBy('name')->get(['id', 'name']),
+            'positions' => $household->financialPositions()->where('archived', false)->where('classification', 'liability')->orderBy('name')->get(['id', 'name']),
             'defaults' => ['target_date' => now()->addYear()->toDateString()],
         ]);
     }
 
     public function store(StoreGoalRequest $request, CreateGoal $action): RedirectResponse
     {
-        $action->handle($request->validated(), $request->user(), $this->household($request));
+        $goal = $action->handle($request->validated(), $request->user(), $this->household($request));
+        $this->enableSavingsCategoryRollover($goal, $request->user());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Goal created.')]);
 
@@ -103,6 +113,7 @@ class GoalController extends Controller
     public function update(UpdateGoalRequest $request, Goal $goal, UpdateGoal $action): RedirectResponse
     {
         $action->handle($goal, $request->validated());
+        $this->enableSavingsCategoryRollover($goal->refresh(), $request->user());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Goal updated.')]);
 
@@ -129,5 +140,20 @@ class GoalController extends Controller
         }
 
         return back();
+    }
+
+    private function enableSavingsCategoryRollover(Goal $goal, User $user): void
+    {
+        if ($goal->type !== 'save_up' || $goal->linked_category_id === null) {
+            return;
+        }
+
+        $category = Category::query()->find($goal->linked_category_id);
+        if (! $category) {
+            return;
+        }
+
+        $now = now();
+        $this->setCategoryRollover->handle($category, true, $now->year, $now->month, $user);
     }
 }

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\StagedTransaction;
 use App\Models\StatementUpload;
@@ -11,7 +10,6 @@ it('creates a payee rule from an import review row', function () {
     $household = $user->household();
     $account = Account::factory()->create(['household_id' => $household->id]);
     $category = Category::factory()->create(['household_id' => $household->id, 'name' => 'Streaming']);
-    Bucket::factory()->create(['household_id' => $household->id, 'name' => 'Fun']);
     $upload = StatementUpload::factory()->create([
         'household_id' => $household->id,
         'account_id' => $account->id,

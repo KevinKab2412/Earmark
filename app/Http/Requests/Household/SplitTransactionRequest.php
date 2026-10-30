@@ -32,7 +32,6 @@ class SplitTransactionRequest extends FormRequest
         return [
             'splits' => ['present', 'array'],
             'splits.*.category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)],
-            'splits.*.bucket_id' => ['required', 'string', Rule::exists('buckets', 'id')->where('household_id', $householdId)],
             'splits.*.amount' => ['required', 'integer'],
             'splits.*.memo' => ['nullable', 'string', 'max:255'],
         ];

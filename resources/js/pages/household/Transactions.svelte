@@ -54,8 +54,6 @@
         category_id: string | null;
         category: string | null;
         category_type: string | null;
-        bucket_id: string | null;
-        bucket: string | null;
         amount: number;
         amount_formatted: string;
         memo: string | null;
@@ -82,7 +80,6 @@
         date_to: string | null;
         account_id: string | null;
         category_id: string | null;
-        bucket_id: string | null;
         source: string | null;
         payee: string | null;
         amount_min: number | null;
@@ -96,7 +93,7 @@
         filters,
         accounts,
         categories,
-        buckets,
+        categoryGroups,
         sources,
         activities,
         currentUserId,
@@ -105,8 +102,8 @@
         transactions: Paginator;
         filters: Filters;
         accounts: Option[];
-        categories: Option[];
-        buckets: Option[];
+        categories: (Option & { direction: 'income' | 'expense' | 'transfer' | 'adjustment'; category_group_id: string })[];
+        categoryGroups: Option[];
         sources: string[];
         activities: { id: string; action: string; description: string; user: string | null; at: string | null }[];
         currentUserId: number;
@@ -140,7 +137,6 @@
             date_to: filters.date_to ?? '',
             account_id: filters.account_id ?? '',
             category_id: filters.category_id ?? '',
-            bucket_id: filters.bucket_id ?? '',
             source: filters.source ?? '',
             payee: filters.payee ?? '',
             amount_min: filters.amount_min?.toString() ?? '',
@@ -168,7 +164,6 @@
             date_to: '',
             account_id: '',
             category_id: '',
-            bucket_id: '',
             source: '',
             payee: '',
             amount_min: '',
@@ -198,7 +193,6 @@
         account_id: string;
         payee: string;
         category_id: string;
-        bucket_id: string;
         amount: number;
         memo: string;
         cleared: boolean;
@@ -210,7 +204,6 @@
         account_id: '',
         payee: '',
         category_id: '',
-        bucket_id: '',
         amount: 0,
         memo: '',
         cleared: false,
@@ -229,7 +222,6 @@
             account_id: row.account_id ?? '',
             payee: row.payee,
             category_id: row.category_id ?? '',
-            bucket_id: row.bucket_id ?? '',
             amount: row.amount,
             memo: row.memo ?? '',
             cleared: row.cleared,
@@ -237,29 +229,17 @@
         };
     }
 
-    const CATEGORY_TYPES = [
-        'income',
-        'housing',
-        'transportation',
-        'food',
-        'household',
-        'personal',
-        'health',
-        'debt',
-        'savings',
-        'fees',
-        'other',
-    ] as const;
-
     let showNewCategory = $state(false);
     let newCategoryName = $state('');
-    let newCategoryType = $state<(typeof CATEGORY_TYPES)[number]>('other');
+    let newCategoryGroupId = $state('');
+    let newCategoryDirection = $state<'income' | 'expense'>('expense');
     let creatingCategory = $state(false);
     let newCategoryError = $state<string | null>(null);
 
     function openNewCategory(): void {
         newCategoryName = '';
-        newCategoryType = 'other';
+        newCategoryDirection = 'expense';
+        newCategoryGroupId = categories.find((category) => category.direction === 'expense')?.category_group_id ?? categoryGroups[0]?.id ?? '';
         newCategoryError = null;
         showNewCategory = true;
     }
@@ -274,7 +254,7 @@
 
         router.post(
             CategoryController.store.url(),
-            { name: newCategoryName, type: newCategoryType },
+            { name: newCategoryName, category_group_id: newCategoryGroupId, direction: newCategoryDirection },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -290,7 +270,8 @@
                 onError: (formErrors) => {
                     newCategoryError =
                         formErrors.name ??
-                        formErrors.type ??
+                        formErrors.category_group_id ??
+                        formErrors.direction ??
                         'Could not create the category.';
                 },
                 onFinish: () => (creatingCategory = false),
@@ -310,7 +291,6 @@
                 account_id: editForm.account_id,
                 payee: editForm.payee,
                 category_id: editForm.category_id || null,
-                bucket_id: editForm.bucket_id || null,
                 amount: Number(editForm.amount),
                 memo: editForm.memo || null,
                 cleared: editForm.cleared,
@@ -336,7 +316,7 @@
     }
 
     // Split editing for the row currently open in the edit panel.
-    type SplitAllocation = { bucket_id: string; category_id: string; amount: number };
+    type SplitAllocation = { category_id: string; amount: number };
     let splitMode = $state(false);
     let splitRows = $state<SplitAllocation[]>([]);
     let splitAmount = $state(0);
@@ -344,12 +324,12 @@
     function beginSplit(): void {
         splitMode = true;
         if (splitRows.length === 0) {
-            splitRows = [{ bucket_id: '', category_id: '', amount: splitAmount }];
+            splitRows = [{ category_id: '', amount: splitAmount }];
         }
     }
 
     function addAllocation(): void {
-        splitRows = [...splitRows, { bucket_id: '', category_id: '', amount: 0 }];
+        splitRows = [...splitRows, { category_id: '', amount: 0 }];
     }
 
     function removeAllocation(i: number): void {
@@ -368,7 +348,6 @@
             {
                 splits: splitMode
                     ? splitRows.map((s) => ({
-                          bucket_id: s.bucket_id,
                           category_id: s.category_id || null,
                           amount: Number(s.amount),
                       }))
@@ -463,15 +442,6 @@
             </select>
         </div>
         <div class="grid gap-1">
-            <Label for="f-bucket">Bucket</Label>
-            <select id="f-bucket" class={selectClass} bind:value={filterForm.bucket_id}>
-                <option value="">All buckets</option>
-                {#each buckets as bucket (bucket.id)}
-                    <option value={bucket.id}>{bucket.name}</option>
-                {/each}
-            </select>
-        </div>
-        <div class="grid gap-1">
             <Label for="f-from">From</Label>
             <Input id="f-from" type="date" bind:value={filterForm.date_from} />
         </div>
@@ -555,7 +525,6 @@
                         <th class="px-4 py-3 font-medium">Account</th>
                         <th class="px-4 py-3 font-medium">Payee</th>
                         <th class="px-4 py-3 font-medium">Category</th>
-                        <th class="px-4 py-3 font-medium">Bucket</th>
                         <th class="px-4 py-3 text-right font-medium">Amount</th>
                         <th class="px-4 py-3 font-medium">Status</th>
                         <th class="px-4 py-3 text-right font-medium">Actions</th>
@@ -582,7 +551,6 @@
                                     type={transaction.category_type}
                                 />
                             </td>
-                            <td class="px-4 py-3 text-muted-foreground">{transaction.bucket ?? '—'}</td>
                             <td
                                 class="px-4 py-3 text-right font-mono {transaction.amount > 0
                                     ? 'text-emerald-600'
@@ -723,15 +691,6 @@
                 </select>
             </div>
             <div class="grid gap-2">
-                <Label for="edit-bucket">Bucket</Label>
-                <select id="edit-bucket" class={selectClass} bind:value={editForm.bucket_id}>
-                    <option value="">(none)</option>
-                    {#each buckets as bucket (bucket.id)}
-                        <option value={bucket.id}>{bucket.name}</option>
-                    {/each}
-                </select>
-            </div>
-            <div class="grid gap-2">
                 <Label for="edit-amount">Amount (cents, negative for spend)</Label>
                 <Input id="edit-amount" type="number" step="1" bind:value={editForm.amount} />
                 <InputError message={editErrors.amount} />
@@ -750,7 +709,7 @@
             </div>
             <div class="rounded-lg border border-dashed p-3">
                 <div class="flex items-center justify-between">
-                    <span class="text-sm font-medium">Split across buckets</span>
+                    <span class="text-sm font-medium">Split across categories</span>
                     {#if !splitMode}
                         <Button type="button" variant="outline" onclick={beginSplit} data-test="begin-split">
                             Split
@@ -760,13 +719,7 @@
                 {#if splitMode}
                     <InputError message={editErrors.splits} />
                     {#each splitRows as split, i (i)}
-                        <div class="mt-2 grid items-end gap-2 md:grid-cols-[1fr_1fr_110px_auto]">
-                            <select class={selectClass} bind:value={split.bucket_id}>
-                                <option value="">Bucket</option>
-                                {#each buckets as bucket (bucket.id)}
-                                    <option value={bucket.id}>{bucket.name}</option>
-                                {/each}
-                            </select>
+                        <div class="mt-2 grid items-end gap-2 md:grid-cols-[1fr_110px_auto]">
                             <select class={selectClass} bind:value={split.category_id}>
                                 <option value="">(no category)</option>
                                 {#each categories as category (category.id)}
@@ -811,16 +764,18 @@
                     />
                 </div>
                 <div class="grid gap-1">
-                    <Label for="new-category-type">Type</Label>
-                    <select
-                        id="new-category-type"
-                        class={selectClass}
-                        bind:value={newCategoryType}
-                        data-test="new-category-type"
-                    >
-                        {#each CATEGORY_TYPES as type (type)}
-                            <option value={type}>{type}</option>
+                    <Label for="new-category-group">Group</Label>
+                    <select id="new-category-group" class={selectClass} bind:value={newCategoryGroupId}>
+                        {#each categoryGroups as group (group.id)}
+                            <option value={group.id}>{group.name}</option>
                         {/each}
+                    </select>
+                </div>
+                <div class="grid gap-1">
+                    <Label for="new-category-direction">Type</Label>
+                    <select id="new-category-direction" class={selectClass} bind:value={newCategoryDirection}>
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
                     </select>
                 </div>
                 <InputError message={newCategoryError ?? undefined} />
@@ -921,23 +876,6 @@
                         {/each}
                     </select>
                     <InputError message={errors.category_id} />
-                </div>
-
-                <div class="grid gap-2">
-                    <Label for="bucket_id">Bucket</Label>
-                    <select
-                        id="bucket_id"
-                        name="bucket_id"
-                        class={selectClass}
-                        bind:value={entry.bucketId}
-                        onchange={() => entry.touchBucket()}
-                    >
-                        <option value="">(none)</option>
-                        {#each buckets as bucket (bucket.id)}
-                            <option value={bucket.id}>{bucket.name}</option>
-                        {/each}
-                    </select>
-                    <InputError message={errors.bucket_id} />
                 </div>
 
                 <div class="grid gap-2">

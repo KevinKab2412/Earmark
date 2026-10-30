@@ -25,7 +25,8 @@ class Goal extends Model
         'required_payment',
         'principal',
         'linked_account_id',
-        'linked_bucket_id',
+        'linked_category_id',
+        'payment_category_id',
         'linked_position_id',
         'sort_order',
         'status',
@@ -65,11 +66,19 @@ class Goal extends Model
     }
 
     /**
-     * @return BelongsTo<Bucket, $this>
+     * @return BelongsTo<Category, $this>
      */
-    public function bucket(): BelongsTo
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(Bucket::class, 'linked_bucket_id');
+        return $this->belongsTo(Category::class, 'linked_category_id');
+    }
+
+    /**
+     * @return BelongsTo<Category, $this>
+     */
+    public function paymentCategory(): BelongsTo
+    {
+        return $this->belongsTo(Category::class, 'payment_category_id');
     }
 
     /**

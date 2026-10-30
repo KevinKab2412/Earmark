@@ -46,7 +46,6 @@ class TransactionController extends Controller
             'date_to' => $request->string('date_to')->toString() ?: null,
             'account_id' => $request->string('account_id')->toString() ?: null,
             'category_id' => $request->string('category_id')->toString() ?: null,
-            'bucket_id' => $request->string('bucket_id')->toString() ?: null,
             'source' => $request->string('source')->toString() ?: null,
             'payee' => $request->string('payee')->toString() ?: null,
             'amount_min' => $request->filled('amount_min') ? (int) $request->input('amount_min') : null,
@@ -67,9 +66,7 @@ class TransactionController extends Controller
                 'payee' => $transaction->payee,
                 'category_id' => $transaction->category_id,
                 'category' => $transaction->category?->name ?? ($transaction->is_split ? __('(split)') : null),
-                'category_type' => $transaction->category?->type ?? ($transaction->is_split ? 'other' : null),
-                'bucket_id' => $transaction->bucket_id,
-                'bucket' => $transaction->bucket?->name ?? ($transaction->is_split ? __('(split)') : null),
+                'category_type' => $transaction->category?->direction ?? ($transaction->is_split ? 'expense' : null),
                 'amount' => $transaction->amount,
                 'amount_formatted' => Money::format($transaction->amount),
                 'memo' => $transaction->memo,
@@ -98,8 +95,8 @@ class TransactionController extends Controller
             'transactions' => $transactions,
             'filters' => $filters,
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'buckets' => $household->buckets()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name', 'direction', 'category_group_id']),
+            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
             'sources' => ['manual', 'imported_csv', 'imported_ofx', 'imported_qif', 'imported_pdf'],
             'activities' => $activities,
             'members' => $household->members()->get(['users.id', 'users.name'])
@@ -190,7 +187,6 @@ class TransactionController extends Controller
         return response()->json([
             'rule_id' => $match['rule']?->id,
             'category_id' => $match['category_id'],
-            'bucket_id' => $match['bucket_id'],
         ]);
     }
 }

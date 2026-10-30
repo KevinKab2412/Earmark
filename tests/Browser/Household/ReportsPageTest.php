@@ -12,7 +12,6 @@ it('shows a cash-flow report with drilldown', function () {
         'amount' => -3000,
         'payee' => 'Loblaws',
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ]);
 

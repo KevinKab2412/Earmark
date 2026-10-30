@@ -20,7 +20,6 @@ class PreviewPayeeRuleRequest extends FormRequest
         return [
             'pattern' => ['required', 'string', 'max:255'],
             'category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)],
-            'bucket_id' => ['nullable', 'string', Rule::exists('buckets', 'id')->where('household_id', $householdId)],
             'rename_to' => ['nullable', 'string', 'max:255'],
             'hide_from_reports' => ['nullable', 'boolean'],
             'mark_for_review' => ['nullable', 'boolean'],

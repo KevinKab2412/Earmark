@@ -24,7 +24,7 @@ class TransferController extends Controller
         $household = $this->household($request);
 
         $outflows = $household->transactions()
-            ->with('account')
+            ->with(['account', 'category'])
             ->whereNotNull('transfer_pair_id')
             ->where('amount', '<', 0)
             ->orderBy('date', 'desc')
@@ -50,6 +50,8 @@ class TransferController extends Controller
                 'to_account_id' => $in?->account_id,
                 'amount' => abs($out->amount),
                 'amount_formatted' => Money::format(abs($out->amount)),
+                'category_id' => $out->category_id,
+                'category' => $out->category?->name,
                 'memo' => $out->memo,
             ];
         });
@@ -57,8 +59,19 @@ class TransferController extends Controller
         return Inertia::render('household/Transfers', [
             'transfers' => $transfers,
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()
+                ->where('archived', false)
+                ->where('direction', 'transfer')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'defaults' => [
                 'date' => now()->toDateString(),
+                'transfer_category_id' => $household->categories()
+                    ->where('archived', false)
+                    ->where('direction', 'transfer')
+                    ->orderBy('sort_order')
+                    ->value('id'),
             ],
         ]);
     }

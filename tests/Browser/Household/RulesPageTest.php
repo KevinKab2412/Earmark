@@ -12,7 +12,6 @@ it('creates, previews, and applies a payee rule', function () {
         'account_id' => $account->id,
         'payee' => 'LOBLAWS #5025',
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ]);
 

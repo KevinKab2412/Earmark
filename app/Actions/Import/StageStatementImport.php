@@ -79,7 +79,6 @@ class StageStatementImport
                 $rule = $this->payeeRules->suggest($draft->payee, $household);
                 $previous = $history[$this->payeeHistory->key($draft->payee)] ?? null;
                 $categoryId = $rule['category_id'] ?? $previous['category_id'] ?? null;
-                $bucketId = $rule['bucket_id'] ?? $previous['bucket_id'] ?? null;
 
                 $isDuplicate = $row['reason'] !== null;
 
@@ -92,9 +91,7 @@ class StageStatementImport
                     'external_id' => $draft->externalId,
                     'amount' => $draft->amountCents,
                     'suggested_category_id' => $categoryId,
-                    'suggested_bucket_id' => $bucketId,
                     'final_category_id' => $categoryId,
-                    'final_bucket_id' => $bucketId,
                     'accept' => ! $isDuplicate,
                     'is_possible_duplicate' => $isDuplicate,
                     'duplicate_reason' => $row['reason'],

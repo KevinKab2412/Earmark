@@ -22,7 +22,6 @@ class StoreTransactionRequest extends FormRequest
             'account_id' => ['required', 'string', Rule::exists('accounts', 'id')->where('household_id', $householdId)],
             'payee' => ['required', 'string', 'max:255'],
             'category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)],
-            'bucket_id' => ['nullable', 'string', Rule::exists('buckets', 'id')->where('household_id', $householdId)],
             'amount' => ['required', 'integer'],
             'memo' => ['nullable', 'string', 'max:255'],
         ];

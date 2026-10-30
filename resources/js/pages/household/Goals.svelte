@@ -32,6 +32,7 @@
         target_amount_formatted: string;
         target_date: string | null;
         linked_to: string | null;
+        payment_category: string | null;
         progress?: { current: string; remaining: string; percent: number };
         principal_formatted?: string;
         apr?: string | null;
@@ -43,14 +44,16 @@
         goals,
         types,
         accounts,
-        buckets,
+        categories,
+        paymentCategories,
         positions,
         defaults,
     }: {
         goals: Goal[];
         types: string[];
         accounts: Option[];
-        buckets: Option[];
+        categories: Option[];
+        paymentCategories: Option[];
         positions: Option[];
         defaults: { target_date: string };
     } = $props();
@@ -82,13 +85,13 @@
     <div class="flex items-center justify-between">
         <Heading
             title="Goals"
-            description="Save-up and debt-paydown goals. Progress comes only from the balances you link — nothing here touches the ledger."
+            description="Savings goals follow a category balance. Debt goals follow a liability balance and can point to a payment category."
         />
         <Button type="button" data-test="open-create-goal" onclick={() => (showForm = true)}>Add goal</Button>
     </div>
 
     {#if goals.length === 0 && !showForm}
-        <ActionableEmptyState title="No goals yet" description="Link a bucket, account, or position and set a target.">
+        <ActionableEmptyState title="No goals yet" description="Link a category or debt balance and set a target.">
             {#snippet action()}
                 <Button type="button" onclick={() => (showForm = true)}>Add goal</Button>
             {/snippet}
@@ -173,33 +176,15 @@
                         <Input id="goal-date" name="target_date" type="date" value={defaults.target_date} />
                     </div>
                     <div class="grid gap-2">
-                        <Label for="goal-bucket">Link a bucket (optional)</Label>
-                        <select id="goal-bucket" name="linked_bucket_id" class={selectClass}>
-                            <option value="">(none)</option>
-                            {#each buckets as bucket (bucket.id)}<option value={bucket.id}>{bucket.name}</option>{/each}
+                        <Label for="goal-category">Savings category</Label>
+                        <select id="goal-category" name="linked_category_id" class={selectClass} required>
+                            <option value="">Choose a category</option>
+                            {#each categories as category (category.id)}<option value={category.id}>{category.name}</option>{/each}
                         </select>
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="goal-account">Link an account (optional)</Label>
-                        <select id="goal-account" name="linked_account_id" class={selectClass}>
-                            <option value="">(none)</option>
-                            {#each accounts as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
-                        </select>
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="goal-position">Link a position, e.g. a future-home fund (optional)</Label>
-                        <select id="goal-position" name="linked_position_id" class={selectClass}>
-                            <option value="">(none)</option>
-                            {#each positions as position (position.id)}<option value={position.id}>{position.name}</option>{/each}
-                        </select>
+                        <InputError message={errors.linked_category_id} />
                     </div>
                 {:else}
                     <input type="hidden" name="target_amount" value="0" />
-                    <div class="grid gap-2">
-                        <Label for="goal-principal">Principal owed (cents)</Label>
-                        <Input id="goal-principal" name="principal" type="number" step="1" required />
-                        <InputError message={errors.principal} />
-                    </div>
                     <div class="grid gap-2">
                         <Label for="goal-apr">APR (basis points, e.g. 500 = 5%)</Label>
                         <Input id="goal-apr" name="apr_bps" type="number" min="0" step="1" />
@@ -211,10 +196,26 @@
                         <InputError message={errors.required_payment} />
                     </div>
                     <div class="grid gap-2">
-                        <Label for="goal-liability">Link a liability position (optional)</Label>
+                        <Label for="goal-liability">Liability position</Label>
                         <select id="goal-liability" name="linked_position_id" class={selectClass}>
-                            <option value="">(none)</option>
+                            <option value="">Choose a liability position</option>
                             {#each positions as position (position.id)}<option value={position.id}>{position.name}</option>{/each}
+                        </select>
+                        <InputError message={errors.linked_position_id} />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="goal-debt-account">Or debt account</Label>
+                        <select id="goal-debt-account" name="linked_account_id" class={selectClass}>
+                            <option value="">Choose a debt account</option>
+                            {#each accounts as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
+                        </select>
+                        <InputError message={errors.linked_account_id} />
+                    </div>
+                    <div class="grid gap-2">
+                        <Label for="goal-payment-category">Payment category (optional)</Label>
+                        <select id="goal-payment-category" name="payment_category_id" class={selectClass}>
+                            <option value="">(none)</option>
+                            {#each paymentCategories as category (category.id)}<option value={category.id}>{category.name}</option>{/each}
                         </select>
                     </div>
                 {/if}

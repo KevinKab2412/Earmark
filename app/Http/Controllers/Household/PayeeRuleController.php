@@ -34,7 +34,7 @@ class PayeeRuleController extends Controller
 
         $rules = PayeeRule::query()
             ->where('household_id', $household->id)
-            ->with(['category:id,name', 'bucket:id,name'])
+            ->with('category:id,name')
             ->orderBy('priority')->orderBy('created_at')
             ->get()
             ->map(fn (PayeeRule $rule): array => [
@@ -45,8 +45,6 @@ class PayeeRuleController extends Controller
                 'enabled' => $rule->enabled,
                 'category_id' => $rule->category_id,
                 'category' => $rule->category?->name,
-                'bucket_id' => $rule->bucket_id,
-                'bucket' => $rule->bucket?->name,
                 'rename_to' => $rule->rename_to,
                 'hide_from_reports' => $rule->hide_from_reports,
                 'mark_for_review' => $rule->mark_for_review,
@@ -56,7 +54,6 @@ class PayeeRuleController extends Controller
         return Inertia::render('household/Rules', [
             'rules' => $rules,
             'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'buckets' => $household->buckets()->where('archived', false)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -128,18 +125,16 @@ class PayeeRuleController extends Controller
         $draft = new PayeeRule([
             'pattern' => $data['pattern'],
             'category_id' => $data['category_id'] ?? null,
-            'bucket_id' => $data['bucket_id'] ?? null,
             'rename_to' => $data['rename_to'] ?? null,
             'hide_from_reports' => (bool) ($data['hide_from_reports'] ?? false),
             'mark_for_review' => (bool) ($data['mark_for_review'] ?? false),
         ]);
 
         $categories = $household->categories()->pluck('name', 'id');
-        $buckets = $household->buckets()->pluck('name', 'id');
 
         $matches = $this->rules->matchingTransactions($household, $data['pattern']);
 
-        $rows = $matches->take(50)->map(function ($transaction) use ($draft, $categories, $buckets): array {
+        $rows = $matches->take(50)->map(function ($transaction) use ($draft, $categories): array {
             $after = $transaction->replicate();
             $this->rules->applyTo($draft, $after);
 
@@ -151,8 +146,6 @@ class PayeeRuleController extends Controller
                 'payee_after' => $after->payee,
                 'category_before' => $transaction->category_id ? $categories[$transaction->category_id] ?? null : null,
                 'category_after' => $after->category_id ? $categories[$after->category_id] ?? null : null,
-                'bucket_before' => $transaction->bucket_id ? $buckets[$transaction->bucket_id] ?? null : null,
-                'bucket_after' => $after->bucket_id ? $buckets[$after->bucket_id] ?? null : null,
                 'hidden' => $after->excluded_from_reports,
                 'needs_review' => ! $after->reviewed,
             ];

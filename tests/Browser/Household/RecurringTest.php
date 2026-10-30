@@ -17,7 +17,6 @@ it('confirms a detected recurring candidate', function () {
             'date' => $date,
             'reviewed' => true,
             'category_id' => null,
-            'bucket_id' => null,
             'created_by_user_id' => $user->id,
         ]);
     }

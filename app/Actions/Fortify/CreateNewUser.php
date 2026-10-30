@@ -8,7 +8,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Models\HouseholdInvitation;
 use App\Models\HouseholdMembership;
 use App\Models\User;
-use Database\Seeders\BucketSeeder;
+use Database\Seeders\CategoryGroupSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -19,7 +19,7 @@ class CreateNewUser implements CreatesNewUsers
 
     public function __construct(
         private CreateHousehold $createHousehold,
-        private BucketSeeder $bucketSeeder,
+        private CategoryGroupSeeder $categoryGroupSeeder,
     ) {}
 
     /**
@@ -56,7 +56,7 @@ class CreateNewUser implements CreatesNewUsers
                 $invitation->update(['accepted_at' => now()]);
             } else {
                 $household = $this->createHousehold->handle($user, "{$input['name']}'s Household");
-                $this->bucketSeeder->run($household);
+                $this->categoryGroupSeeder->run($household);
             }
 
             return $user;

@@ -1,13 +1,11 @@
 <?php
 
-use App\Models\Bucket;
-use App\Models\BucketAssignment;
-use App\Models\BucketObligationVersion;
+use App\Models\Category;
+use App\Models\CategoryGroup;
 use App\Models\User;
-use App\Support\Money;
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('plan page renders with current month label', function () {
+test('plan page renders category groups for the selected month', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
@@ -16,51 +14,83 @@ test('plan page renders with current month label', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('household/Plan')
             ->where('monthLabel', now()->format('F Y'))
-            ->has('rows')
+            ->has('groups')
+            ->has('categories')
+            ->has('groupsForSelect')
         );
 });
 
-test('plan rows expose obligation, available, needed, and cents for status', function () {
+test('plan rows expose planned activity available and rollover by category', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $bucket = Bucket::factory()->create([
-        'household_id' => $household->id,
-        'monthly_obligation' => 10000,
-        'name' => 'Groceries',
-    ]);
-
-    BucketObligationVersion::create([
-        'bucket_id' => $bucket->id,
-        'monthly_obligation' => 10000,
-        'target_amount' => null,
-        'target_date' => '2026-12-31',
-        'effective_year' => now()->year,
-        'effective_month' => now()->month,
-        'created_by_user_id' => $user->id,
-    ]);
-
-    BucketAssignment::create([
-        'from_bucket_id' => null,
-        'to_bucket_id' => $bucket->id,
-        'year' => now()->year,
-        'month' => now()->month,
-        'amount' => 15000,
-        'created_by_user_id' => $user->id,
-    ]);
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $category->budgetPlans()->whereDate('effective_month', now()->startOfMonth()->toDateString())->firstOrFail()
+        ->update(['planned_amount' => 10000]);
 
     $this->actingAs($user)
         ->get(route('household.plan.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('household/Plan')
-            ->has('rows.1', fn (Assert $row) => $row
-                ->where('name', 'Groceries')
-                ->where('available', Money::format(15000))
-                ->where('obligation', Money::format(10000))
-                ->where('available_cents', 15000)
-                ->where('needed_cents', 10000)
-                ->etc()
-            )
+            ->has('groups')
+            ->where('categories', fn ($categories): bool => collect($categories)->contains(fn (array $row): bool => $row['name'] === 'Groceries'
+                && $row['planned_cents'] === 10000
+                && $row['available_cents'] === 10000
+                && array_key_exists('rollover_enabled', $row)
+            ))
         );
+});
+
+test('a budget change can be limited to one month or applied to every future month', function () {
+    $user = User::factory()->create();
+    $category = $user->household()->categories()->where('name', 'Groceries')->firstOrFail();
+    $month = now()->startOfMonth();
+    $year = $month->year;
+    $monthNumber = $month->month;
+
+    $category->budgetPlans()->whereDate('effective_month', $month->toDateString())->firstOrFail()
+        ->update(['planned_amount' => 10000]);
+
+    $this->actingAs($user)->post(route('household.plan.categories.budget', $category), [
+        'amount' => '250.00',
+        'year' => $year,
+        'month' => $monthNumber,
+        'apply_to_future_months' => false,
+    ])->assertSessionHasNoErrors();
+
+    expect((int) $category->budgetPlans()
+        ->whereDate('effective_month', $month->toDateString())
+        ->value('planned_amount'))->toBe(25000);
+});
+
+test('a category and category group can be created from the plan', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+
+    $this->actingAs($user)
+        ->post(route('household.plan.groups.store'), ['name' => 'Pets'])
+        ->assertRedirect();
+
+    $group = CategoryGroup::query()->where('household_id', $household->id)->where('name', 'Pets')->firstOrFail();
+
+    $this->actingAs($user)
+        ->post(route('household.plan.categories.store'), [
+            'name' => 'Pet Care',
+            'category_group_id' => $group->id,
+            'direction' => 'expense',
+            'icon' => null,
+            'year' => now()->year,
+            'month' => now()->month,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $category = Category::query()->where('household_id', $household->id)->where('name', 'Pet Care')->firstOrFail();
+
+    expect($category->category_group_id)->toBe($group->id)
+        ->and($category->direction)->toBe('expense');
+    expect($category->budgetPlans()
+        ->whereDate('effective_month', now()->startOfMonth()->toDateString())
+        ->value('planned_amount'))->toBe(0);
 });
 
 test('month query updates the cursor', function () {
@@ -74,37 +104,6 @@ test('month query updates the cursor', function () {
             ->where('month', $prior->month)
             ->where('monthLabel', $prior->format('F Y'))
         );
-});
-
-test('create bucket and category from plan', function () {
-    $user = User::factory()->create();
-
-    $this->actingAs($user)
-        ->post(route('household.plan.buckets.store'), [
-            'name' => 'Groceries',
-            'kind' => 'ongoing',
-            'monthly_obligation' => 20000,
-            'target_date' => '2027-01-01',
-        ])
-        ->assertRedirect();
-
-    $this->actingAs($user)
-        ->post(route('household.plan.categories.store'), [
-            'name' => 'Food',
-            'type' => 'food',
-        ])
-        ->assertRedirect();
-
-    $this->assertDatabaseHas('buckets', [
-        'household_id' => $user->household()->id,
-        'name' => 'Groceries',
-        'monthly_obligation' => 20000,
-    ]);
-    $this->assertDatabaseHas('categories', [
-        'household_id' => $user->household()->id,
-        'name' => 'Food',
-        'type' => 'food',
-    ]);
 });
 
 test('guests are redirected from the plan page', function () {

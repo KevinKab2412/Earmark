@@ -14,7 +14,6 @@ test('a rule can be created inline and returns to the caller', function () {
             'pattern' => 'NETFLIX',
             'enabled' => true,
             'category_id' => $category->id,
-            'bucket_id' => null,
             'rename_to' => null,
             'hide_from_reports' => false,
             'mark_for_review' => false,

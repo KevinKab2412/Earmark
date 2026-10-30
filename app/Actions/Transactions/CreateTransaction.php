@@ -15,7 +15,7 @@ class CreateTransaction
     public function __construct(private TransactionService $transactions) {}
 
     /**
-     * @param  array{date: string, account_id: string, payee: string, category_id: ?string, bucket_id: ?string, amount: int, memo: ?string}  $data
+     * @param  array{date: string, account_id: string, payee: string, category_id: ?string, amount: int, memo: ?string}  $data
      */
     public function handle(array $data, User $user, Household $household): Transaction
     {

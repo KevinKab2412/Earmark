@@ -15,7 +15,7 @@ class TransferFunds
     use AsAction;
 
     /**
-     * @param  array{date: string, from_account_id: string, to_account_id: string, amount: int, memo: ?string}  $data
+     * @param  array{date: string, from_account_id: string, to_account_id: string, category_id: string, amount: int, memo: ?string}  $data
      * @return array{0: Transaction, 1: Transaction}
      */
     public function handle(array $data, User $user, Household $household): array
@@ -38,8 +38,7 @@ class TransferFunds
                 'date' => $data['date'],
                 'account_id' => $data['from_account_id'],
                 'payee' => $payee,
-                'category_id' => null,
-                'bucket_id' => null,
+                'category_id' => $data['category_id'],
                 'amount' => -$data['amount'],
                 'memo' => $memo,
                 'is_split' => false,
@@ -53,8 +52,7 @@ class TransferFunds
                 'date' => $data['date'],
                 'account_id' => $data['to_account_id'],
                 'payee' => $payee,
-                'category_id' => null,
-                'bucket_id' => null,
+                'category_id' => $data['category_id'],
                 'amount' => $data['amount'],
                 'memo' => $memo,
                 'is_split' => false,

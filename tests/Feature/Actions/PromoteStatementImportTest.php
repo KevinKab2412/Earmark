@@ -2,7 +2,7 @@
 
 use App\Actions\Import\PromoteStatementImport;
 use App\Models\Account;
-use App\Models\Bucket;
+use App\Models\Category;
 use App\Models\Household;
 use App\Models\StagedTransaction;
 use App\Models\StatementUpload;
@@ -30,7 +30,7 @@ function importContext(): array
 
 test('promotion writes accepted pending rows to the ledger with provenance', function () {
     [$user, $household, $account, $upload] = importContext();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
+    $category = Category::factory()->create(['household_id' => $household->id]);
 
     $row = StagedTransaction::factory()->create([
         'statement_upload_id' => $upload->id,
@@ -39,7 +39,7 @@ test('promotion writes accepted pending rows to the ledger with provenance', fun
         'amount' => -7250,
         'accept' => true,
         'status' => 'pending',
-        'final_bucket_id' => $bucket->id,
+        'final_category_id' => $category->id,
     ]);
 
     $counts = PromoteStatementImport::run($upload, $user, $household);
@@ -51,7 +51,7 @@ test('promotion writes accepted pending rows to the ledger with provenance', fun
         'account_id' => $account->id,
         'payee' => 'Loblaws',
         'amount' => -7250,
-        'bucket_id' => $bucket->id,
+        'category_id' => $category->id,
         'source' => 'imported_csv',
         'import_batch_id' => $upload->id,
         'created_by_user_id' => $user->id,
@@ -106,8 +106,8 @@ test('rejected and unaccepted rows are not promoted', function () {
 
 test('a split row promotes into a transaction with matching splits', function () {
     [$user, $household, $account, $upload] = importContext();
-    $groceries = Bucket::factory()->create(['household_id' => $household->id]);
-    $household2 = Bucket::factory()->create(['household_id' => $household->id]);
+    $groceries = Category::factory()->create(['household_id' => $household->id]);
+    $household2 = Category::factory()->create(['household_id' => $household->id]);
 
     $row = StagedTransaction::factory()->create([
         'statement_upload_id' => $upload->id,
@@ -117,8 +117,8 @@ test('a split row promotes into a transaction with matching splits', function ()
         'is_split' => true,
     ]);
     $row->splits()->createMany([
-        ['bucket_id' => $groceries->id, 'amount' => -6000],
-        ['bucket_id' => $household2->id, 'amount' => -4000],
+        ['category_id' => $groceries->id, 'amount' => -6000],
+        ['category_id' => $household2->id, 'amount' => -4000],
     ]);
 
     $counts = PromoteStatementImport::run($upload, $user, $household);
@@ -135,7 +135,7 @@ test('a split row promotes into a transaction with matching splits', function ()
 
 test('a split row whose parts do not sum is counted as failed, not promoted', function () {
     [$user, $household, $account, $upload] = importContext();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
+    $category = Category::factory()->create(['household_id' => $household->id]);
 
     $row = StagedTransaction::factory()->create([
         'statement_upload_id' => $upload->id,
@@ -144,7 +144,7 @@ test('a split row whose parts do not sum is counted as failed, not promoted', fu
         'status' => 'pending',
         'is_split' => true,
     ]);
-    $row->splits()->create(['bucket_id' => $bucket->id, 'amount' => -6000]);
+    $row->splits()->create(['category_id' => $category->id, 'amount' => -6000]);
 
     $counts = PromoteStatementImport::run($upload, $user, $household);
 
@@ -153,19 +153,14 @@ test('a split row whose parts do not sum is counted as failed, not promoted', fu
         ->and(Transaction::count())->toBe(0);
 });
 
-test('income without a bucket promotes into Unassigned Funds', function () {
+test('income without a category promotes as uncategorized', function () {
     [$user, $household, $account, $upload] = importContext();
-    $unassigned = Bucket::query()
-        ->where('household_id', $household->id)
-        ->where('name', Bucket::UNASSIGNED_FUNDS)
-        ->sole();
 
     StagedTransaction::factory()->create([
         'statement_upload_id' => $upload->id,
         'amount' => 200000,
         'accept' => true,
         'status' => 'pending',
-        'final_bucket_id' => null,
         'final_category_id' => null,
     ]);
 
@@ -174,6 +169,6 @@ test('income without a bucket promotes into Unassigned Funds', function () {
     $this->assertDatabaseHas('transactions', [
         'import_batch_id' => $upload->id,
         'amount' => 200000,
-        'bucket_id' => $unassigned->id,
+        'category_id' => null,
     ]);
 });

@@ -16,8 +16,12 @@ class Category extends Model
 
     protected $fillable = [
         'household_id',
+        'category_group_id',
+        'starting_month',
+        'starting_balance',
         'name',
-        'type',
+        'direction',
+        'icon',
         'sort_order',
         'archived',
         'notes',
@@ -31,6 +35,8 @@ class Category extends Model
         return [
             'sort_order' => 'integer',
             'archived' => 'boolean',
+            'starting_month' => 'date',
+            'starting_balance' => 'integer',
         ];
     }
 
@@ -40,6 +46,46 @@ class Category extends Model
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
+    }
+
+    /**
+     * @return BelongsTo<CategoryGroup, $this>
+     */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(CategoryGroup::class, 'category_group_id');
+    }
+
+    /**
+     * @return HasMany<CategoryBudgetPlan, $this>
+     */
+    public function budgetPlans(): HasMany
+    {
+        return $this->hasMany(CategoryBudgetPlan::class);
+    }
+
+    /**
+     * @return HasMany<CategoryRolloverSetting, $this>
+     */
+    public function rolloverSettings(): HasMany
+    {
+        return $this->hasMany(CategoryRolloverSetting::class);
+    }
+
+    /**
+     * @return HasMany<CategoryBudgetMove, $this>
+     */
+    public function budgetMovesFrom(): HasMany
+    {
+        return $this->hasMany(CategoryBudgetMove::class, 'from_category_id');
+    }
+
+    /**
+     * @return HasMany<CategoryBudgetMove, $this>
+     */
+    public function budgetMovesTo(): HasMany
+    {
+        return $this->hasMany(CategoryBudgetMove::class, 'to_category_id');
     }
 
     /**

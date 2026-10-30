@@ -27,7 +27,6 @@ class GoalFactory extends Factory
             'required_payment' => null,
             'principal' => null,
             'linked_account_id' => null,
-            'linked_bucket_id' => null,
             'linked_position_id' => null,
             'sort_order' => 0,
             'status' => 'active',

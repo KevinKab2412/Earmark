@@ -54,8 +54,9 @@
         enabledCards: CardKey[];
         cards: {
             budget: {
-                unassigned: string;
-                underfunded: { id: string; name: string }[];
+                planned: string;
+                available: string;
+                over_budget: { id: string; name: string; available: string }[];
             };
             top_categories: {
                 items: {
@@ -100,7 +101,7 @@
     let saving = $state(false);
 
     const shown = (key: CardKey): boolean => enabledCards.includes(key);
-    const unassignedNegative = $derived(cards.budget.unassigned.startsWith('-'));
+    const availableNegative = $derived(cards.budget.available.startsWith('-'));
 
     function startCustomizing(): void {
         selected = [...enabledCards];
@@ -191,13 +192,18 @@
     {#if shown('budget')}
         <div class="grid gap-4 md:grid-cols-3">
             <FinanceSummary
-                title="Unassigned Funds"
-                value={cards.budget.unassigned}
-                description="Available to assign"
-                class={unassignedNegative ? 'text-destructive' : ''}
+                title="Planned"
+                value={cards.budget.planned}
+                description="Across budget categories"
+            />
+            <FinanceSummary
+                title="Available"
+                value={cards.budget.available}
+                description="Including category rollover"
+                class={availableNegative ? 'text-destructive' : ''}
             />
 
-            <div class="md:col-span-2" data-test="underfunded-buckets">
+            <div data-test="over-budget-categories">
                 <Card>
                     <CardHeader
                         class="flex flex-row items-center justify-between"
@@ -205,24 +211,23 @@
                         <CardTitle
                             class="text-sm font-medium text-muted-foreground"
                         >
-                            Underfunded buckets
+                            Over budget categories
                         </CardTitle>
                         <span class="text-sm tabular-nums"
-                            >{cards.budget.underfunded.length}</span
+                            >{cards.budget.over_budget.length}</span
                         >
                     </CardHeader>
                     <CardContent>
-                        {#if cards.budget.underfunded.length === 0}
+                        {#if cards.budget.over_budget.length === 0}
                             <p class="text-sm text-muted-foreground">
-                                Every bucket has enough for this month and any
-                                rolled-forward gaps. Nice.
+                                No categories are over budget this month.
                             </p>
                         {:else}
-                            {#each cards.budget.underfunded as bucket (bucket.id)}
+                            {#each cards.budget.over_budget as category (category.id)}
                                 <MoneyRow
-                                    label={bucket.name}
-                                    amount="Fund"
-                                    detail="Needs more this month"
+                                    label={category.name}
+                                    amount={category.available}
+                                    detail="Negative available balance"
                                 />
                             {/each}
                             <Button variant="link" class="px-0" asChild>

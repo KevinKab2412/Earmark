@@ -42,6 +42,8 @@ class UpdateStatementReviewRequest extends FormRequest
             'rows.*.final_bucket_id' => ['nullable', 'string', $inHousehold('buckets')],
             'rows.*.accept' => ['required', 'boolean'],
             'rows.*.status' => ['required', Rule::in(['pending', 'rejected'])],
+            'rows.*.transfer_match_type' => ['nullable', Rule::in(['staged', 'transaction'])],
+            'rows.*.transfer_match_id' => ['nullable', 'string', 'max:26'],
             'rows.*.splits' => ['nullable', 'array'],
             'rows.*.splits.*.category_id' => ['nullable', 'string', $inHousehold('categories')],
             'rows.*.splits.*.bucket_id' => ['required', 'string', $inHousehold('buckets')],

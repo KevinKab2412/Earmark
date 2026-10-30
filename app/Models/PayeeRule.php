@@ -19,7 +19,6 @@ class PayeeRule extends Model
         'pattern',
         'enabled',
         'category_id',
-        'bucket_id',
         'rename_to',
         'hide_from_reports',
         'mark_for_review',
@@ -60,14 +59,6 @@ class PayeeRule extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
-    }
-
-    /**
-     * @return BelongsTo<Bucket, $this>
-     */
-    public function bucket(): BelongsTo
-    {
-        return $this->belongsTo(Bucket::class);
     }
 
     public function matches(string $payee): bool

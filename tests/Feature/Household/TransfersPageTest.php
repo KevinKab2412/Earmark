@@ -60,24 +60,41 @@ test('transfer rejects non-positive amount', function () {
     ], $user, $household))->toThrow(InvalidArgumentException::class);
 });
 
-test('deleting one half of a transfer cascades to its sibling', function () {
+test('deleting one side of a transfer keeps the other transaction', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $a = Account::factory()->create(['household_id' => $household->id]);
-    $b = Account::factory()->create(['household_id' => $household->id]);
+    $from = Account::factory()->create(['household_id' => $household->id]);
+    $to = Account::factory()->create(['household_id' => $household->id]);
 
     [$out, $in] = TransferFunds::run([
         'date' => '2026-06-23',
-        'from_account_id' => $a->id,
-        'to_account_id' => $b->id,
+        'from_account_id' => $from->id,
+        'to_account_id' => $to->id,
         'amount' => 1000,
         'memo' => null,
     ], $user, $household);
 
-    $out->delete();
+    $this->actingAs($user)
+        ->delete(route('household.transfers.destroy', $out))
+        ->assertRedirect(route('household.transfers.index'));
 
-    expect(Transaction::find($out->id))->toBeNull()
-        ->and(Transaction::find($in->id))->toBeNull();
+    $this->assertModelMissing($out);
+    $this->assertModelExists($in);
+    expect($in->refresh()->transfer_pair_id)->toBeNull();
+
+    $other = User::factory()->create();
+
+    $this->actingAs($other)
+        ->delete(route('household.transfers.destroy', $in))
+        ->assertForbidden();
+
+    $this->actingAs($other)
+        ->delete(route('household.transactions.destroy', $in))
+        ->assertNotFound();
+
+    $this->assertModelExists($in);
+    expect($in->refresh()->transfer_pair_id)->toBeNull()
+        ->and($in->household_id)->toBe($household->id);
 });
 
 test('transfers index lists outflow rows only', function () {

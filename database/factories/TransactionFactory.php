@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Household;
 use App\Models\Transaction;
@@ -26,7 +25,6 @@ class TransactionFactory extends Factory
             'account_id' => Account::factory(),
             'payee' => fake()->company(),
             'category_id' => Category::factory(),
-            'bucket_id' => Bucket::factory(),
             'amount' => fake()->numberBetween(-50_000, 50_000) ?: -1000,
             'memo' => null,
             'is_split' => false,

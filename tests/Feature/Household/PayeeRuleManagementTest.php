@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\PayeeRule;
 use App\Models\Transaction;
@@ -20,7 +19,6 @@ function ruleTransaction(User $user, array $attributes = []): Transaction
         'household_id' => $household->id,
         'account_id' => Account::factory()->create(['household_id' => $household->id])->id,
         'category_id' => null,
-        'bucket_id' => null,
         'created_by_user_id' => $user->id,
     ], $attributes));
 }
@@ -36,7 +34,6 @@ function rulePayload(array $overrides = []): array
         'pattern' => 'loblaws',
         'enabled' => true,
         'category_id' => null,
-        'bucket_id' => null,
         'rename_to' => null,
         'hide_from_reports' => false,
         'mark_for_review' => false,
@@ -55,7 +52,6 @@ test('the rules page renders', function () {
             ->component('household/Rules')
             ->has('rules', 1)
             ->has('categories')
-            ->has('buckets')
         );
 });
 
@@ -120,13 +116,11 @@ test('applying a rule updates existing matching transactions and records it', fu
     $user = User::factory()->create();
     $household = $user->household();
     $category = Category::factory()->create(['household_id' => $household->id]);
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
     $rule = PayeeRule::factory()->create([
         'household_id' => $household->id,
         'pattern' => 'loblaws',
         'rename_to' => 'Loblaws',
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
         'hide_from_reports' => true,
         'mark_for_review' => true,
     ]);
@@ -142,7 +136,6 @@ test('applying a rule updates existing matching transactions and records it', fu
     $target->refresh();
     expect($target->payee)->toBe('Loblaws')
         ->and($target->category_id)->toBe($category->id)
-        ->and($target->bucket_id)->toBe($bucket->id)
         ->and($target->excluded_from_reports)->toBeTrue()
         ->and($target->reviewed)->toBeFalse();
 

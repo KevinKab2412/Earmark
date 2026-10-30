@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
+use App\Models\Category;
 use App\Models\Household;
 use App\Models\StagedTransaction;
 use App\Models\StatementUpload;
@@ -38,7 +38,6 @@ function reviewRow(StagedTransaction $row, array $overrides = []): array
         'payee' => $row->payee,
         'amount' => $row->amount,
         'final_category_id' => $row->final_category_id,
-        'final_bucket_id' => $row->final_bucket_id,
         'accept' => $row->accept,
         'status' => $row->status,
         'splits' => [],
@@ -57,7 +56,7 @@ test('the review page renders staged rows', function () {
             ->where('upload.filename', $upload->original_filename)
             ->has('rows', 1)
             ->has('categories')
-            ->has('buckets')
+            ->has('categoryGroups')
         );
 });
 
@@ -69,7 +68,7 @@ test('guests are redirected from the review page', function () {
 
 test('corrections to a staged row are saved', function () {
     [$user, $household, $upload] = reviewContext();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
+    $category = Category::factory()->create(['household_id' => $household->id]);
     $row = StagedTransaction::factory()->create(['statement_upload_id' => $upload->id, 'amount' => -1000]);
 
     $this->actingAs($user)
@@ -78,7 +77,7 @@ test('corrections to a staged row are saved', function () {
                 'date' => '2026-07-01',
                 'payee' => 'Corrected Payee',
                 'amount' => -8000,
-                'final_bucket_id' => $bucket->id,
+                'final_category_id' => $category->id,
                 'accept' => true,
             ])],
         ])
@@ -90,7 +89,7 @@ test('corrections to a staged row are saved', function () {
         'date' => '2026-07-01 00:00:00',
         'payee' => 'Corrected Payee',
         'amount' => -8000,
-        'final_bucket_id' => $bucket->id,
+        'final_category_id' => $category->id,
     ]);
 });
 
@@ -109,13 +108,13 @@ test('a staged row can be rejected', function () {
 
 test('splits that do not sum to the amount are rejected', function () {
     [$user, $household, $upload] = reviewContext();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
+    $category = Category::factory()->create(['household_id' => $household->id]);
     $row = StagedTransaction::factory()->create(['statement_upload_id' => $upload->id, 'amount' => -10000]);
 
     $this->actingAs($user)
         ->patch(route('household.import.staged.update', $upload), [
             'rows' => [reviewRow($row, [
-                'splits' => [['bucket_id' => $bucket->id, 'category_id' => null, 'amount' => -6000, 'memo' => null]],
+                'splits' => [['category_id' => $category->id, 'amount' => -6000, 'memo' => null]],
             ])],
         ])
         ->assertSessionHasErrors('rows.0.splits');
@@ -123,16 +122,16 @@ test('splits that do not sum to the amount are rejected', function () {
 
 test('splits that sum to the amount are persisted', function () {
     [$user, $household, $upload] = reviewContext();
-    $groceries = Bucket::factory()->create(['household_id' => $household->id]);
-    $home = Bucket::factory()->create(['household_id' => $household->id]);
+    $groceries = Category::factory()->create(['household_id' => $household->id]);
+    $home = Category::factory()->create(['household_id' => $household->id]);
     $row = StagedTransaction::factory()->create(['statement_upload_id' => $upload->id, 'amount' => -10000]);
 
     $this->actingAs($user)
         ->patch(route('household.import.staged.update', $upload), [
             'rows' => [reviewRow($row, [
                 'splits' => [
-                    ['bucket_id' => $groceries->id, 'category_id' => null, 'amount' => -6000, 'memo' => null],
-                    ['bucket_id' => $home->id, 'category_id' => null, 'amount' => -4000, 'memo' => 'Home'],
+                    ['category_id' => $groceries->id, 'amount' => -6000, 'memo' => null],
+                    ['category_id' => $home->id, 'amount' => -4000, 'memo' => 'Home'],
                 ],
             ])],
         ])

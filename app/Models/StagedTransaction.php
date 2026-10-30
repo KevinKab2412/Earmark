@@ -33,6 +33,9 @@ class StagedTransaction extends Model
         'duplicate_of_transaction_id',
         'is_split',
         'transaction_id',
+        'transfer_pair_id',
+        'transfer_match_staged_transaction_id',
+        'transfer_match_transaction_id',
     ];
 
     /**
@@ -113,5 +116,25 @@ class StagedTransaction extends Model
     public function duplicateOf(): BelongsTo
     {
         return $this->belongsTo(Transaction::class, 'duplicate_of_transaction_id');
+    }
+
+    /**
+     * The other staged row in a confirmed transfer match.
+     *
+     * @return BelongsTo<StagedTransaction, $this>
+     */
+    public function transferMatchStagedTransaction(): BelongsTo
+    {
+        return $this->belongsTo(StagedTransaction::class, 'transfer_match_staged_transaction_id');
+    }
+
+    /**
+     * The ledger transaction in a confirmed transfer match.
+     *
+     * @return BelongsTo<Transaction, $this>
+     */
+    public function transferMatchTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'transfer_match_transaction_id');
     }
 }

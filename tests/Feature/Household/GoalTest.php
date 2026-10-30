@@ -3,7 +3,8 @@
 use App\Enums\PositionClassification;
 use App\Enums\PositionPurpose;
 use App\Models\Account;
-use App\Models\Bucket;
+use App\Models\Category;
+use App\Models\CategoryBudgetPlan;
 use App\Models\FinancialPosition;
 use App\Models\Goal;
 use App\Models\Transaction;
@@ -11,26 +12,21 @@ use App\Models\User;
 use App\Models\Valuation;
 use App\Services\Goal\GoalService;
 
-test('a save-up goal reads progress from its linked bucket', function () {
+test('a save-up goal reads progress from its linked category balance', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $bucket = Bucket::factory()->create(['household_id' => $household->id]);
-    $account = Account::factory()->create(['household_id' => $household->id]);
-
-    Transaction::factory()->create([
-        'household_id' => $household->id,
-        'account_id' => $account->id,
-        'bucket_id' => $bucket->id,
-        'amount' => 5000,
-        'date' => now()->toDateString(),
-        'created_by_user_id' => $user->id,
+    $category = Category::factory()->create(['household_id' => $household->id, 'direction' => 'expense']);
+    CategoryBudgetPlan::query()->create([
+        'category_id' => $category->id,
+        'effective_month' => now()->startOfMonth()->toDateString(),
+        'planned_amount' => 5000,
     ]);
 
     $goal = Goal::factory()->create([
         'household_id' => $household->id,
         'type' => 'save_up',
         'target_amount' => 20000,
-        'linked_bucket_id' => $bucket->id,
+        'linked_category_id' => $category->id,
     ]);
 
     $progress = app(GoalService::class)->progress($goal);
@@ -40,18 +36,18 @@ test('a save-up goal reads progress from its linked bucket', function () {
         ->and($progress['percent'])->toBe(25);
 });
 
-test('a save-up goal reads progress from its linked account balance', function () {
+test('a debt goal reads principal from its linked credit-card balance', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $account = Account::factory()->create(['household_id' => $household->id, 'starting_balance' => 10000]);
+    $account = Account::factory()->create(['household_id' => $household->id, 'type' => 'credit_card', 'starting_balance' => -10000]);
     Transaction::factory()->create([
-        'household_id' => $household->id, 'account_id' => $account->id, 'amount' => -3000,
-        'date' => now()->toDateString(), 'created_by_user_id' => $user->id, 'bucket_id' => null,
+        'household_id' => $household->id, 'account_id' => $account->id, 'amount' => 3000,
+        'date' => now()->toDateString(), 'created_by_user_id' => $user->id,
     ]);
 
-    $goal = Goal::factory()->create(['household_id' => $household->id, 'linked_account_id' => $account->id]);
+    $goal = Goal::factory()->create(['household_id' => $household->id, 'type' => 'pay_down', 'linked_account_id' => $account->id]);
 
-    expect(app(GoalService::class)->currentAmount($goal))->toBe(7000);
+    expect(app(GoalService::class)->principal($goal))->toBe(7000);
 });
 
 test('a future-home goal links to a home-purchase position balance', function () {
@@ -110,11 +106,11 @@ test('progress is zero when nothing is linked', function () {
 
 test('a goal can be created and the index renders progress', function () {
     $user = User::factory()->create();
-    $bucket = Bucket::factory()->create(['household_id' => $user->household()->id]);
+    $category = $user->household()->categories()->where('name', 'Emergency Fund')->firstOrFail();
 
     $this->actingAs($user)->post(route('household.goals.store'), [
         'name' => 'Emergency fund', 'type' => 'save_up', 'target_amount' => 500000,
-        'linked_bucket_id' => $bucket->id,
+        'linked_category_id' => $category->id,
     ])->assertRedirect(route('household.goals.index'))->assertSessionHasNoErrors();
 
     $this->actingAs($user)->get(route('household.goals.index'))

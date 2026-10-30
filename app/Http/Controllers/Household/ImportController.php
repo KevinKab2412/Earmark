@@ -10,10 +10,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Household\StoreStatementImportRequest;
 use App\Http\Requests\Household\StoreStructuredStatementImportRequest;
 use App\Http\Requests\Household\UpdateStatementReviewRequest;
+use App\Models\StagedTransaction;
 use App\Models\StatementUpload;
 use App\Services\Import\CsvImportNormalizer;
 use App\Services\Import\OfxImportNormalizer;
 use App\Services\Import\QifImportNormalizer;
+use App\Services\Import\TransferMatchSuggestionService;
 use App\Support\Import\NormalizationResult;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +32,7 @@ class ImportController extends Controller
         private CsvImportNormalizer $normalizer,
         private OfxImportNormalizer $ofx,
         private QifImportNormalizer $qif,
+        private TransferMatchSuggestionService $transferMatches,
     ) {}
 
     public function index(Request $request): Response
@@ -119,32 +122,38 @@ class ImportController extends Controller
         $household = $this->household($request);
         abort_unless($statementUpload->household_id === $household->id, 404);
 
-        $rows = $statementUpload->stagedTransactions()
+        $stagedRows = $statementUpload->stagedTransactions()
             ->with('splits')
             ->orderBy('date')
             ->orderBy('created_at')
-            ->get()
-            ->map(fn ($row): array => [
-                'id' => $row->id,
-                'date' => $row->date->toDateString(),
-                'payee' => $row->payee,
-                'raw_payee' => $row->raw_payee,
-                'amount' => $row->amount,
-                'amount_formatted' => Money::format($row->amount),
-                'status' => $row->status,
-                'accept' => $row->accept,
-                'is_possible_duplicate' => $row->is_possible_duplicate,
-                'duplicate_reason' => $row->duplicate_reason,
-                'is_split' => $row->is_split,
-                'final_category_id' => $row->final_category_id,
-                'final_bucket_id' => $row->final_bucket_id,
-                'splits' => $row->splits->map(fn ($split): array => [
-                    'category_id' => $split->category_id,
-                    'bucket_id' => $split->bucket_id,
-                    'amount' => $split->amount,
-                    'memo' => $split->memo,
-                ])->values(),
-            ]);
+            ->get();
+        $transferMatches = $this->transferMatches->forRows($stagedRows);
+
+        $rows = $stagedRows->map(fn (StagedTransaction $row): array => [
+            'id' => $row->id,
+            'date' => $row->date->toDateString(),
+            'payee' => $row->payee,
+            'raw_payee' => $row->raw_payee,
+            'amount' => $row->amount,
+            'amount_formatted' => Money::format($row->amount),
+            'status' => $row->status,
+            'accept' => $row->accept,
+            'is_possible_duplicate' => $row->is_possible_duplicate,
+            'duplicate_reason' => $row->duplicate_reason,
+            'is_split' => $row->is_split,
+            'final_category_id' => $row->final_category_id,
+            'final_bucket_id' => $row->final_bucket_id,
+            'transfer_pair_id' => $row->transfer_pair_id,
+            'transfer_match_staged_transaction_id' => $row->transfer_match_staged_transaction_id,
+            'transfer_match_transaction_id' => $row->transfer_match_transaction_id,
+            'transfer_matches' => $transferMatches[$row->id] ?? [],
+            'splits' => $row->splits->map(fn ($split): array => [
+                'category_id' => $split->category_id,
+                'bucket_id' => $split->bucket_id,
+                'amount' => $split->amount,
+                'memo' => $split->memo,
+            ])->values(),
+        ]);
 
         return Inertia::render('household/ImportReview', [
             'upload' => [

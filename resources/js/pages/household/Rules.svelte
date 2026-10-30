@@ -33,8 +33,6 @@
         enabled: boolean;
         category_id: string | null;
         category: string | null;
-        bucket_id: string | null;
-        bucket: string | null;
         rename_to: string | null;
         hide_from_reports: boolean;
         mark_for_review: boolean;
@@ -49,8 +47,6 @@
         payee_after: string;
         category_before: string | null;
         category_after: string | null;
-        bucket_before: string | null;
-        bucket_after: string | null;
         hidden: boolean;
         needs_review: boolean;
     };
@@ -58,11 +54,9 @@
     let {
         rules,
         categories,
-        buckets,
     }: {
         rules: Rule[];
         categories: Option[];
-        buckets: Option[];
     } = $props();
 
     const selectClass =
@@ -74,7 +68,6 @@
         pattern: string;
         enabled: boolean;
         category_id: string;
-        bucket_id: string;
         rename_to: string;
         hide_from_reports: boolean;
         mark_for_review: boolean;
@@ -87,7 +80,6 @@
         pattern: '',
         enabled: true,
         category_id: '',
-        bucket_id: '',
         rename_to: '',
         hide_from_reports: false,
         mark_for_review: false,
@@ -107,7 +99,6 @@
             pattern: form.pattern,
             enabled: form.enabled,
             category_id: form.category_id || null,
-            bucket_id: form.bucket_id || null,
             rename_to: form.rename_to || null,
             hide_from_reports: form.hide_from_reports,
             mark_for_review: form.mark_for_review,
@@ -130,7 +121,6 @@
             pattern: rule.pattern,
             enabled: rule.enabled,
             category_id: rule.category_id ?? '',
-            bucket_id: rule.bucket_id ?? '',
             rename_to: rule.rename_to ?? '',
             hide_from_reports: rule.hide_from_reports,
             mark_for_review: rule.mark_for_review,
@@ -177,7 +167,6 @@
                 pattern: rule.pattern,
                 enabled: !rule.enabled,
                 category_id: rule.category_id,
-                bucket_id: rule.bucket_id,
                 rename_to: rule.rename_to,
                 hide_from_reports: rule.hide_from_reports,
                 mark_for_review: rule.mark_for_review,
@@ -236,7 +225,6 @@
         const parts: string[] = [];
         if (rule.rename_to) parts.push(`rename → ${rule.rename_to}`);
         if (rule.category) parts.push(`category → ${rule.category}`);
-        if (rule.bucket) parts.push(`bucket → ${rule.bucket}`);
         if (rule.hide_from_reports) parts.push('hide from reports');
         if (rule.mark_for_review) parts.push('mark for review');
 
@@ -338,15 +326,6 @@
                     {/each}
                 </select>
             </div>
-            <div class="grid gap-2">
-                <Label for="rule-bucket">Set bucket</Label>
-                <select id="rule-bucket" class={selectClass} bind:value={form.bucket_id}>
-                    <option value="">(no change)</option>
-                    {#each buckets as bucket (bucket.id)}
-                        <option value={bucket.id}>{bucket.name}</option>
-                    {/each}
-                </select>
-            </div>
             <div class="flex flex-col gap-2">
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" bind:checked={form.hide_from_reports} /> Hide matches from reports
@@ -379,7 +358,6 @@
                                 <th class="px-3 py-2">Date</th>
                                 <th class="px-3 py-2">Payee</th>
                                 <th class="px-3 py-2">Category</th>
-                                <th class="px-3 py-2">Bucket</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -388,7 +366,6 @@
                                     <td class="px-3 py-2">{row.date}</td>
                                     <td class="px-3 py-2">{row.payee_before} → {row.payee_after}</td>
                                     <td class="px-3 py-2">{row.category_before ?? '—'} → {row.category_after ?? '—'}</td>
-                                    <td class="px-3 py-2">{row.bucket_before ?? '—'} → {row.bucket_after ?? '—'}</td>
                                 </tr>
                             {/each}
                         </tbody>

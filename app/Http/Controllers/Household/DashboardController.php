@@ -5,13 +5,13 @@ namespace App\Http\Controllers\Household;
 use App\Concerns\ResolvesHousehold;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Household\UpdateOverviewCardsRequest;
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Goal;
 use App\Models\Holding;
 use App\Models\RecurringSchedule;
 use App\Models\Scenario;
-use App\Services\Budget\BudgetService;
+use App\Models\TransactionSplit;
+use App\Services\CategoryBudgetService;
 use App\Services\NetWorth\SnapshotService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
@@ -26,7 +26,7 @@ class DashboardController extends Controller
     public const CARDS = ['budget', 'top_categories', 'review_queue', 'recurring', 'goals', 'net_worth', 'investments', 'scenarios'];
 
     public function __construct(
-        private BudgetService $budget,
+        private CategoryBudgetService $budget,
         private SnapshotService $snapshot,
     ) {}
 
@@ -35,14 +35,22 @@ class DashboardController extends Controller
         $household = $this->household($request);
         $year = (int) now()->year;
         $month = (int) now()->month;
+        $budgetCategories = $household->categories()
+            ->where('archived', false)
+            ->whereIn('direction', ['income', 'expense'])
+            ->get();
 
-        $unassigned = $household->buckets()->where('name', Bucket::UNASSIGNED_FUNDS)->first();
-        $unassignedAvailable = $unassigned
-            ? $this->budget->availableForMonth($unassigned, $year, $month)
-            : 0;
+        $budgetRows = $budgetCategories->map(function (Category $category) use ($year, $month): array {
+            return [
+                'id' => $category->id,
+                'name' => $category->name,
+                ...$this->budget->summaryForMonth($category, $year, $month),
+            ];
+        });
 
-        $underfunded = $this->budget->underfundedBuckets($year, $month, $household)
-            ->map(fn (Bucket $bucket): array => ['id' => $bucket->id, 'name' => $bucket->name])
+        $overspent = $budgetRows
+            ->filter(fn (array $row): bool => $row['available'] < 0)
+            ->map(fn (array $row): array => ['id' => $row['id'], 'name' => $row['name'], 'available' => Money::format($row['available'])])
             ->values();
 
         $snapshot = $this->snapshot->forHousehold($household);
@@ -50,28 +58,63 @@ class DashboardController extends Controller
 
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = now()->endOfMonth()->toDateString();
-
-        $categorySpend = $household->transactions()
+        $directSpend = $household->transactions()
             ->whereNull('transfer_pair_id')
+            ->where('is_split', false)
             ->whereNotNull('category_id')
+            ->whereHas('category', fn ($query) => $query->where('direction', 'expense'))
             ->where('amount', '<', 0)
             ->whereBetween('date', [$monthStart, $monthEnd])
+            ->get(['category_id', 'amount']);
+
+        $splitSpend = TransactionSplit::query()
+            ->whereNotNull('category_id')
+            ->where('amount', '<', 0)
+            ->whereHas('transaction', function ($query) use ($household, $monthStart, $monthEnd): void {
+                $query->where('household_id', $household->id)
+                    ->whereNull('transfer_pair_id')
+                    ->whereBetween('date', [$monthStart, $monthEnd]);
+            })
+            ->whereHas('category', fn ($query) => $query->where('direction', 'expense'))
+            ->get(['category_id', 'amount']);
+
+        $categorySpend = $directSpend->concat($splitSpend)
             ->groupBy('category_id')
-            ->selectRaw('category_id, SUM(amount) as total_cents')
-            ->orderByRaw('SUM(amount)')
-            ->limit(6)
-            ->get();
+            ->map(fn ($rows, string $categoryId): object => (object) [
+                'category_id' => $categoryId,
+                'total_cents' => (int) $rows->sum('amount'),
+            ])
+            ->sortBy('total_cents')
+            ->take(6)
+            ->values();
 
         $categoryNames = Category::query()
             ->whereIn('id', $categorySpend->pluck('category_id'))
-            ->get(['id', 'name', 'type'])
+            ->where('direction', 'expense')
+            ->get(['id', 'name', 'direction'])
             ->keyBy('id');
 
         $maxSpend = abs((int) ($categorySpend->min('total_cents') ?? 0)) ?: 1;
         $monthSpendCents = (int) $household->transactions()
             ->whereNull('transfer_pair_id')
+            ->where('is_split', false)
             ->where('amount', '<', 0)
+            ->where(function ($query): void {
+                $query->whereNull('category_id')
+                    ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('direction', 'expense'));
+            })
             ->whereBetween('date', [$monthStart, $monthEnd])
+            ->sum('amount') + (int) TransactionSplit::query()
+            ->where('amount', '<', 0)
+            ->whereHas('transaction', function ($query) use ($household, $monthStart, $monthEnd): void {
+                $query->where('household_id', $household->id)
+                    ->whereNull('transfer_pair_id')
+                    ->whereBetween('date', [$monthStart, $monthEnd]);
+            })
+            ->where(function ($query): void {
+                $query->whereNull('category_id')
+                    ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('direction', 'expense'));
+            })
             ->sum('amount');
 
         $topCategories = $categorySpend->map(function ($row) use ($categoryNames, $maxSpend): array {
@@ -79,7 +122,7 @@ class DashboardController extends Controller
 
             return [
                 'name' => $categoryNames[$row->category_id]?->name ?? __('Uncategorized'),
-                'type' => $categoryNames[$row->category_id]?->type,
+                'type' => $categoryNames[$row->category_id]?->direction,
                 'spent' => Money::format($spent),
                 'ratio' => round($spent / $maxSpend, 4),
             ];
@@ -90,8 +133,9 @@ class DashboardController extends Controller
             'enabledCards' => $household->overview_cards ?? self::CARDS,
             'cards' => [
                 'budget' => [
-                    'unassigned' => Money::format($unassignedAvailable),
-                    'underfunded' => $underfunded,
+                    'planned' => Money::format((int) $budgetRows->sum('planned_amount')),
+                    'available' => Money::format((int) $budgetRows->sum('available')),
+                    'over_budget' => $overspent,
                 ],
                 'top_categories' => [
                     'items' => $topCategories,

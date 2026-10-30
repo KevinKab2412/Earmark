@@ -88,19 +88,19 @@ class Household extends Model
     }
 
     /**
-     * @return HasMany<Bucket, $this>
-     */
-    public function buckets(): HasMany
-    {
-        return $this->hasMany(Bucket::class);
-    }
-
-    /**
      * @return HasMany<Category, $this>
      */
     public function categories(): HasMany
     {
         return $this->hasMany(Category::class);
+    }
+
+    /**
+     * @return HasMany<CategoryGroup, $this>
+     */
+    public function categoryGroups(): HasMany
+    {
+        return $this->hasMany(CategoryGroup::class);
     }
 
     /**

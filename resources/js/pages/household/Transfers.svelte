@@ -34,17 +34,21 @@
         to_account_id: string | null;
         amount: number;
         amount_formatted: string;
+        category_id: string | null;
+        category: string | null;
         memo: string | null;
     };
 
     let {
         transfers,
         accounts,
+        categories,
         defaults,
     }: {
         transfers: Transfer[];
         accounts: { id: string; name: string }[];
-        defaults: { date: string };
+        categories: { id: string; name: string }[];
+        defaults: { date: string; transfer_category_id: string | null };
     } = $props();
 
     let showForm = $state(false);
@@ -54,6 +58,7 @@
         date: '',
         from_account_id: '',
         to_account_id: '',
+        category_id: '',
         amount: 0,
         memo: '',
     });
@@ -68,6 +73,7 @@
             date: transfer.date,
             from_account_id: transfer.from_account_id ?? '',
             to_account_id: transfer.to_account_id ?? '',
+            category_id: transfer.category_id ?? defaults.transfer_category_id ?? '',
             amount: transfer.amount,
             memo: transfer.memo ?? '',
         };
@@ -84,6 +90,7 @@
                 date: editForm.date,
                 from_account_id: editForm.from_account_id,
                 to_account_id: editForm.to_account_id,
+                category_id: editForm.category_id,
                 amount: Number(editForm.amount),
                 memo: editForm.memo || null,
             },
@@ -145,6 +152,7 @@
                         <th class="px-4 py-3 font-medium">Date</th>
                         <th class="px-4 py-3 font-medium">From</th>
                         <th class="px-4 py-3 font-medium">To</th>
+                        <th class="px-4 py-3 font-medium">Category</th>
                         <th class="px-4 py-3 text-right font-medium">Amount</th>
                         <th class="px-4 py-3"></th>
                     </tr>
@@ -155,6 +163,7 @@
                             <td class="px-4 py-3">{transfer.date}</td>
                             <td class="px-4 py-3">{transfer.from}</td>
                             <td class="px-4 py-3">{transfer.to}</td>
+                            <td class="px-4 py-3">{transfer.category ?? 'Transfer'}</td>
                             <td class="px-4 py-3 text-right font-mono">
                                 {transfer.amount_formatted}
                             </td>
@@ -222,6 +231,15 @@
                     {/each}
                 </select>
                 <InputError message={editErrors.to_account_id} />
+            </div>
+            <div class="grid gap-2">
+                <Label for="edit-category">Category</Label>
+                <select id="edit-category" class={selectClass} bind:value={editForm.category_id}>
+                    {#each categories as category (category.id)}
+                        <option value={category.id}>{category.name}</option>
+                    {/each}
+                </select>
+                <InputError message={editErrors.category_id} />
             </div>
             <div class="grid gap-2">
                 <Label for="edit-amount">Amount (cents)</Label>
@@ -295,6 +313,17 @@
                         {/each}
                     </select>
                     <InputError message={errors.to_account_id} />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label for="category_id">Transfer category</Label>
+                    <select id="category_id" name="category_id" required class={selectClass} value={defaults.transfer_category_id ?? ''}>
+                        <option value="">Select transfer type</option>
+                        {#each categories as category (category.id)}
+                            <option value={category.id}>{category.name}</option>
+                        {/each}
+                    </select>
+                    <InputError message={errors.category_id} />
                 </div>
 
                 <div class="grid gap-2">

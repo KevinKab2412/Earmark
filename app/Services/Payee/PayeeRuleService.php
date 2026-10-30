@@ -10,12 +10,12 @@ use Illuminate\Support\Collection;
 class PayeeRuleService
 {
     /**
-     * @return array{rule: ?PayeeRule, category_id: ?string, bucket_id: ?string}
+     * @return array{rule: ?PayeeRule, category_id: ?string}
      */
     public function suggest(string $payee, ?Household $household = null): array
     {
         if ($payee === '') {
-            return ['rule' => null, 'category_id' => null, 'bucket_id' => null];
+            return ['rule' => null, 'category_id' => null];
         }
 
         $query = PayeeRule::query()
@@ -32,23 +32,22 @@ class PayeeRuleService
                 return [
                     'rule' => $rule,
                     'category_id' => $rule->category_id,
-                    'bucket_id' => $rule->bucket_id,
                 ];
             }
         }
 
-        return ['rule' => null, 'category_id' => null, 'bucket_id' => null];
+        return ['rule' => null, 'category_id' => null];
     }
 
     /**
-     * @return array{rule: ?PayeeRule, category_id: ?string, bucket_id: ?string}
+     * @return array{rule: ?PayeeRule, category_id: ?string}
      */
     public function autoApply(string $payee, ?Household $household = null): array
     {
         $match = $this->suggest($payee, $household);
 
         if ($match['rule'] !== null && ! $match['rule']->auto_apply) {
-            return ['rule' => null, 'category_id' => null, 'bucket_id' => null];
+            return ['rule' => null, 'category_id' => null];
         }
 
         return $match;
@@ -69,7 +68,7 @@ class PayeeRuleService
             ->where('household_id', $household->id)
             ->whereNull('transfer_pair_id')
             ->where('payee', 'like', '%'.$pattern.'%')
-            ->with(['category', 'bucket'])
+            ->with('category')
             ->orderBy('date', 'desc')
             ->get();
     }
@@ -89,9 +88,6 @@ class PayeeRuleService
                 $transaction->category_id = $rule->category_id;
             }
 
-            if ($rule->bucket_id) {
-                $transaction->bucket_id = $rule->bucket_id;
-            }
         }
 
         if ($rule->hide_from_reports) {

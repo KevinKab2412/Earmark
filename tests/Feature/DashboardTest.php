@@ -23,8 +23,9 @@ test('authenticated users can visit the overview', function () {
             ->component('household/Overview')
             ->has('availableCards', count(DashboardController::CARDS))
             ->has('enabledCards')
-            ->has('cards.budget.unassigned')
-            ->has('cards.budget.underfunded')
+            ->has('cards.budget.planned')
+            ->has('cards.budget.available')
+            ->has('cards.budget.over_budget')
             ->has('cards.top_categories.items')
             ->has('cards.top_categories.total')
             ->has('cards.review_queue.count')
@@ -42,8 +43,8 @@ test('the overview ranks top spending categories this month', function () {
     $user = User::factory()->create();
     $household = $user->household();
     $account = Account::factory()->create(['household_id' => $household->id]);
-    $groceries = Category::factory()->create(['household_id' => $household->id, 'name' => 'Groceries', 'type' => 'food']);
-    $rent = Category::factory()->create(['household_id' => $household->id, 'name' => 'Rent', 'type' => 'housing']);
+    $groceries = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $rent = Category::factory()->create(['household_id' => $household->id, 'name' => 'Test Rent']);
 
     Transaction::factory()->create(['household_id' => $household->id, 'account_id' => $account->id, 'category_id' => $groceries->id, 'amount' => -5000, 'date' => now()->toDateString(), 'created_by_user_id' => $user->id]);
     Transaction::factory()->create(['household_id' => $household->id, 'account_id' => $account->id, 'category_id' => $rent->id, 'amount' => -150000, 'date' => now()->toDateString(), 'created_by_user_id' => $user->id]);
@@ -51,7 +52,7 @@ test('the overview ranks top spending categories this month', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('cards.top_categories.items.0.name', 'Rent')
+            ->where('cards.top_categories.items.0.name', 'Test Rent')
             ->where('cards.top_categories.items.0.spent', Money::format(150000))
             ->where('cards.top_categories.total', Money::format(155000))
         );

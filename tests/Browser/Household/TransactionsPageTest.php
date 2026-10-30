@@ -1,11 +1,9 @@
 <?php
 
 use App\Models\Account;
-use App\Models\Bucket;
-use App\Models\Category;
 use App\Models\PayeeRule;
 
-it('creates an expense with a category, bucket, and memo', function () {
+it('creates an expense with a category and memo', function () {
     $this->travelTo('2026-09-07 12:00:00');
 
     $user = actingAsOwner();
@@ -14,29 +12,18 @@ it('creates an expense with a category, bucket, and memo', function () {
         'household_id' => $household->id,
         'name' => 'Daily Chequing',
     ]);
-    $category = Category::factory()->create([
-        'household_id' => $household->id,
-        'name' => 'Groceries',
-        'type' => 'food',
-    ]);
-    $bucket = Bucket::factory()->create([
-        'household_id' => $household->id,
-        'name' => 'Food',
-        'kind' => 'ongoing',
-    ]);
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
 
     visit('/household/transactions')
         ->click('@open-create-transaction')
         ->select('account_id', $account->id)
         ->fill('payee', 'Loblaws')
         ->select('category_id', $category->id)
-        ->select('bucket_id', $bucket->id)
         ->fill('amount', '-7250')
         ->fill('memo', 'Weekly shop')
         ->click('@submit-create-transaction')
         ->assertSee('Loblaws')
         ->assertSee('Groceries')
-        ->assertSee('Food')
         ->assertSee('-$72.50');
 
     $this->assertDatabaseHas('transactions', [
@@ -45,12 +32,11 @@ it('creates an expense with a category, bucket, and memo', function () {
         'amount' => -7250,
         'account_id' => $account->id,
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
         'memo' => 'Weekly shop',
     ]);
 });
 
-it('posts income without a bucket to Unassigned Funds', function () {
+it('posts income without assigning it to a category', function () {
     $this->travelTo('2026-09-07 12:00:00');
 
     $user = actingAsOwner();
@@ -59,11 +45,6 @@ it('posts income without a bucket to Unassigned Funds', function () {
         'household_id' => $household->id,
         'name' => 'Daily Chequing',
     ]);
-    $unassigned = Bucket::query()
-        ->where('household_id', $household->id)
-        ->where('name', Bucket::UNASSIGNED_FUNDS)
-        ->sole();
-
     visit('/household/transactions')
         ->click('@open-create-transaction')
         ->select('account_id', $account->id)
@@ -71,18 +52,17 @@ it('posts income without a bucket to Unassigned Funds', function () {
         ->fill('amount', '200000')
         ->click('@submit-create-transaction')
         ->assertSee('Payroll')
-        ->assertSee('$2,000.00')
-        ->assertSee('Unassigned Funds');
+        ->assertSee('$2,000.00');
 
     $this->assertDatabaseHas('transactions', [
         'household_id' => $household->id,
         'payee' => 'Payroll',
         'amount' => 200000,
-        'bucket_id' => $unassigned->id,
+        'category_id' => null,
     ]);
 });
 
-it('prefills category and bucket from a payee rule', function () {
+it('prefills category from a payee rule', function () {
     $this->travelTo('2026-09-07 12:00:00');
 
     $user = actingAsOwner();
@@ -91,21 +71,11 @@ it('prefills category and bucket from a payee rule', function () {
         'household_id' => $household->id,
         'name' => 'Daily Chequing',
     ]);
-    $category = Category::factory()->create([
-        'household_id' => $household->id,
-        'name' => 'Groceries',
-        'type' => 'food',
-    ]);
-    $bucket = Bucket::factory()->create([
-        'household_id' => $household->id,
-        'name' => 'Food envelope',
-        'kind' => 'ongoing',
-    ]);
+    $category = $household->categories()->where('name', 'Groceries')->firstOrFail();
     PayeeRule::factory()->create([
         'household_id' => $household->id,
         'pattern' => 'loblaws',
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
     ]);
 
     visit('/household/transactions')
@@ -117,14 +87,12 @@ it('prefills category and bucket from a payee rule', function () {
         ->click('@submit-create-transaction')
         ->assertSee('LOBLAWS #5025')
         ->assertSee('Groceries')
-        ->assertSee('Food envelope')
         ->assertNoJavaScriptErrors();
 
     $this->assertDatabaseHas('transactions', [
         'household_id' => $household->id,
         'payee' => 'LOBLAWS #5025',
         'category_id' => $category->id,
-        'bucket_id' => $bucket->id,
         'amount' => -7250,
     ]);
 });

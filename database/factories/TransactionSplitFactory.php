@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Bucket;
 use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\TransactionSplit;
@@ -21,7 +20,6 @@ class TransactionSplitFactory extends Factory
         return [
             'transaction_id' => Transaction::factory(),
             'category_id' => Category::factory(),
-            'bucket_id' => Bucket::factory(),
             'amount' => fake()->numberBetween(-50_000, -100),
             'memo' => null,
         ];

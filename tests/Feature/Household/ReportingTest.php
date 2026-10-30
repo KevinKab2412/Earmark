@@ -1,10 +1,12 @@
 <?php
 
+use App\Actions\Transactions\TransferFunds;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\SavedReport;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\CategoryBudgetService;
 use App\Services\Reporting\ReportingService;
 use Illuminate\Support\Str;
 
@@ -16,7 +18,6 @@ function reportTxn(User $user, array $attributes = []): Transaction
         'household_id' => $household->id,
         'account_id' => Account::factory()->create(['household_id' => $household->id])->id,
         'category_id' => null,
-        'bucket_id' => null,
         'transfer_pair_id' => null,
         'excluded_from_reports' => false,
         'created_by_user_id' => $user->id,
@@ -37,11 +38,55 @@ test('cash flow totals reconcile and exclude hidden rows and transfers', functio
         ->and($cashFlow['net_cents'])->toBe(7000);
 });
 
+test('credit card payments stay out of expense reports and category activity', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $card = Account::factory()->create(['household_id' => $household->id, 'type' => 'credit_card']);
+    $checking = Account::factory()->create(['household_id' => $household->id]);
+    $food = Category::factory()->create(['household_id' => $household->id, 'name' => 'Card Purchase']);
+    $food->forceFill(['created_at' => '2026-06-01 00:00:00'])->saveQuietly();
+    $paymentCategory = Category::query()
+        ->where('household_id', $household->id)
+        ->where('name', 'Credit Card Payment')
+        ->sole();
+
+    reportTxn($user, [
+        'account_id' => $card->id,
+        'amount' => -12000,
+        'date' => '2026-06-10',
+        'category_id' => $food->id,
+    ]);
+    reportTxn($user, [
+        'account_id' => $checking->id,
+        'amount' => -12000,
+        'date' => '2026-06-19',
+        'category_id' => $paymentCategory->id,
+    ]);
+    TransferFunds::run([
+        'date' => '2026-06-20',
+        'from_account_id' => $checking->id,
+        'to_account_id' => $card->id,
+        'category_id' => $paymentCategory->id,
+        'amount' => 12000,
+        'memo' => null,
+    ], $user, $household);
+
+    $filters = ['from' => '2026-06-01', 'to' => '2026-06-30'];
+    $cashFlow = app(ReportingService::class)->cashFlow($household, $filters);
+    $category = app(CategoryBudgetService::class)->summaryForMonth($food, 2026, 6);
+    $paymentCategoryActivity = app(CategoryBudgetService::class)->summaryForMonth($paymentCategory, 2026, 6);
+
+    expect($cashFlow['expense_cents'])->toBe(-12000)
+        ->and($category['activity'])->toBe(-12000)
+        ->and($paymentCategoryActivity['activity'])->toBe(0)
+        ->and(Transaction::query()->whereNotNull('transfer_pair_id')->count())->toBe(2);
+});
+
 test('spending by category reconciles to the filtered rows', function () {
     $user = User::factory()->create();
     $household = $user->household();
     $food = Category::factory()->create(['household_id' => $household->id, 'name' => 'Food']);
-    $gas = Category::factory()->create(['household_id' => $household->id, 'name' => 'Gas']);
+    $gas = Category::factory()->create(['household_id' => $household->id, 'name' => 'Test Fuel']);
     reportTxn($user, ['amount' => -6000, 'category_id' => $food->id, 'date' => '2026-06-01']);
     reportTxn($user, ['amount' => -2000, 'category_id' => $food->id, 'date' => '2026-06-02']);
     reportTxn($user, ['amount' => -4000, 'category_id' => $gas->id, 'date' => '2026-06-03']);
