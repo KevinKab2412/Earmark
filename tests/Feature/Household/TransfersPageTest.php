@@ -17,6 +17,7 @@ test('transfer creates two transactions sharing transfer_pair_id', function () {
         'date' => '2026-06-23',
         'from_account_id' => $checking->id,
         'to_account_id' => $savings->id,
+        'category_id' => $household->categories()->where('name', 'Transfer')->value('id'),
         'amount' => 50000,
         'memo' => 'Monthly savings',
     ], $user, $household);
@@ -70,6 +71,7 @@ test('deleting one side of a transfer keeps the other transaction', function () 
         'date' => '2026-06-23',
         'from_account_id' => $from->id,
         'to_account_id' => $to->id,
+        'category_id' => $household->categories()->where('name', 'Transfer')->value('id'),
         'amount' => 1000,
         'memo' => null,
     ], $user, $household);
@@ -107,6 +109,7 @@ test('transfers index lists outflow rows only', function () {
         'date' => '2026-06-23',
         'from_account_id' => $a->id,
         'to_account_id' => $b->id,
+        'category_id' => $household->categories()->where('name', 'Transfer')->value('id'),
         'amount' => 25000,
         'memo' => null,
     ], $user, $household);
@@ -130,11 +133,14 @@ test('store creates the pair and rejects same-account transfers', function () {
     $a = Account::factory()->create(['household_id' => $household->id]);
     $b = Account::factory()->create(['household_id' => $household->id]);
 
+    $categoryId = $household->categories()->where('name', 'Transfer')->value('id');
+
     $this->actingAs($user)
         ->post(route('household.transfers.store'), [
             'date' => '2026-06-23',
             'from_account_id' => $a->id,
             'to_account_id' => $b->id,
+            'category_id' => $categoryId,
             'amount' => 10000,
         ])
         ->assertRedirect(route('household.transfers.index'));
@@ -147,6 +153,7 @@ test('store creates the pair and rejects same-account transfers', function () {
             'date' => '2026-06-23',
             'from_account_id' => $a->id,
             'to_account_id' => $a->id,
+            'category_id' => $categoryId,
             'amount' => 10000,
         ])
         ->assertSessionHasErrors(['to_account_id']);
