@@ -19,7 +19,6 @@ beforeEach(function (): void {
     $this->category = Category::factory()->create([
         'household_id' => $this->household->id,
         'name' => 'Balance Probe',
-        'direction' => 'expense',
         'starting_month' => '2026-03-01',
         'starting_balance' => 10000,
     ]);
@@ -148,7 +147,6 @@ test('a move changes available without changing the planned amount', function ()
     $other = Category::factory()->create([
         'household_id' => $this->household->id,
         'name' => 'Move Counterpart',
-        'direction' => 'expense',
         'starting_month' => '2026-03-01',
         'starting_balance' => 0,
     ]);
@@ -229,7 +227,6 @@ test('another household activity and moves stay invisible', function () {
     $foreignCategory = Category::factory()->create([
         'household_id' => $otherHousehold->id,
         'name' => 'Foreign Destination',
-        'direction' => 'expense',
         'starting_month' => '2026-03-01',
     ]);
     CategoryBudgetMove::query()->create([

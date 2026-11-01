@@ -7,3 +7,12 @@ export type FlashToast = {
     type: 'success' | 'info' | 'warning' | 'error';
     message: string;
 };
+
+export type PlanToolbar = {
+    monthLabel: string;
+    previousUrl: string;
+    nextUrl: string;
+    todayUrl: string;
+    onAddGroup: () => void;
+    onAddCategory: () => void;
+};

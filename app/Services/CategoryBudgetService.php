@@ -17,7 +17,7 @@ class CategoryBudgetService
      */
     public function summaryForMonth(Category $category, int $year, int $month): array
     {
-        if (! in_array($category->direction, ['income', 'expense'], true)) {
+        if (! $category->isBudgetable()) {
             return $this->emptySummary();
         }
 

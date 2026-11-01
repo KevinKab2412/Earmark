@@ -36,7 +36,7 @@ class GoalController extends Controller
         $goals = Goal::query()
             ->where('household_id', $household->id)
             ->whereIn('status', ['active', 'achieved'])
-            ->with(['account:id,name,starting_balance', 'category:id,name', 'paymentCategory:id,name', 'position:id,name'])
+            ->with(['account:id,name,starting_balance', 'category:id,name', 'paymentCategory:id,name,category_group_id', 'paymentCategory.group:id,direction', 'position:id,name'])
             ->orderBy('sort_order')->orderBy('created_at')
             ->get()
             ->map(function (Goal $goal): array {
@@ -58,6 +58,7 @@ class GoalController extends Controller
                     'linked_position_id' => $goal->linked_position_id,
                     'linked_to' => $goal->category?->name ?? $goal->account?->name ?? $goal->position?->name,
                     'payment_category' => $goal->paymentCategory?->name,
+                    'payment_category_direction' => $goal->paymentCategory?->direction,
                 ];
 
                 if ($goal->type === 'pay_down') {
@@ -92,8 +93,8 @@ class GoalController extends Controller
         return Inertia::render('household/Goals', [
             'goals' => $goals,
             'types' => Goal::TYPES,
-            'categories' => $household->categories()->where('archived', false)->whereIn('direction', ['income', 'expense'])->orderBy('name')->get(['id', 'name']),
-            'paymentCategories' => $household->categories()->where('archived', false)->where('direction', 'expense')->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->whereHas('group', fn ($query) => $query->where('direction', 'expense'))->where('kind', 'standard')->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
+            'paymentCategories' => $household->categories()->where('archived', false)->whereHas('group', fn ($query) => $query->whereIn('direction', ['expense', 'transfer']))->where('kind', 'standard')->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
             'accounts' => $household->accounts()->where('archived', false)->whereIn('type', ['credit_card', 'mortgage', 'loan'])->orderBy('name')->get(['id', 'name']),
             'positions' => $household->financialPositions()->where('archived', false)->where('classification', 'liability')->orderBy('name')->get(['id', 'name']),
             'defaults' => ['target_date' => now()->addYear()->toDateString()],

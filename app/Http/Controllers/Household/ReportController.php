@@ -51,7 +51,7 @@ class ReportController extends Controller
                     'filters' => $report->filters,
                 ]),
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'categories' => $household->categories()->where('archived', false)->whereIn('direction', ['income', 'expense'])->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->whereHas('group', fn ($query) => $query->whereIn('direction', ['income', 'expense']))->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
             'types' => self::TYPES,
         ]);
     }
@@ -177,7 +177,7 @@ class ReportController extends Controller
     {
         return $household->categories()
             ->where('archived', false)
-            ->whereIn('direction', ['income', 'expense'])
+            ->whereHas('group', fn ($query) => $query->whereIn('direction', ['income', 'expense']))
             ->orderBy('name')
             ->get()
             ->map(function (Category $category) use ($filters): array {

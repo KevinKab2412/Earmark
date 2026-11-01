@@ -20,7 +20,6 @@ beforeEach(function (): void {
     $this->category = Category::factory()->create([
         'household_id' => $this->household->id,
         'name' => 'Custom Food',
-        'direction' => 'expense',
         'created_at' => '2026-01-01 00:00:00',
     ]);
     $this->service = app(CategoryBudgetService::class);
@@ -97,7 +96,6 @@ test('moves reduce one category and increase another by the same amount', functi
     $destination = Category::factory()->create([
         'household_id' => $this->household->id,
         'name' => 'Custom Travel',
-        'direction' => 'expense',
         'created_at' => '2026-01-01 00:00:00',
     ]);
     CategoryBudgetPlan::query()->create([

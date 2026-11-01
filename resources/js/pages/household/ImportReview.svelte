@@ -107,7 +107,7 @@
         };
         rows: ServerRow[];
         categories: Option[];
-        categoryGroups: Option[];
+        categoryGroups: (Option & { direction: 'income' | 'expense' | 'transfer' })[];
     } = $props();
 
     const selectClass =
@@ -305,15 +305,13 @@
 
     let showCategoryModal = $state(false);
     let newCategoryName = $state('');
-    let newCategoryDirection = $state('expense');
     let newCategoryGroupId = $state('');
     let creatingCategory = $state(false);
     let categoryError = $state<string | null>(null);
 
     function openCategoryModal(): void {
         newCategoryName = '';
-        newCategoryDirection = 'expense';
-        newCategoryGroupId = categoryGroups.find((group) => group.name === 'Other')?.id ?? categoryGroups[0]?.id ?? '';
+        newCategoryGroupId = categoryGroups.find((group) => group.name === 'Other' && group.direction === 'expense')?.id ?? categoryGroups.find((group) => group.direction === 'expense')?.id ?? categoryGroups[0]?.id ?? '';
         categoryError = null;
         showCategoryModal = true;
     }
@@ -328,7 +326,6 @@
             CategoryController.store.url(),
             {
                 name: newCategoryName,
-                direction: newCategoryDirection,
                 category_group_id: newCategoryGroupId,
             },
             {
@@ -340,7 +337,6 @@
                 onError: (formErrors) => {
                     categoryError =
                         formErrors.name ??
-                        formErrors.direction ??
                         formErrors.category_group_id ??
                         'Could not create the category.';
                 },
@@ -733,24 +729,10 @@
                 />
             </div>
             <div class="grid gap-1">
-                <Label for="new-category-direction">Type</Label>
-                <select
-                    id="new-category-direction"
-                    class={selectClass}
-                    bind:value={newCategoryDirection}
-                    data-test="new-category-direction"
-                >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="adjustment">Balance adjustment</option>
-                </select>
-            </div>
-            <div class="grid gap-1">
                 <Label for="new-category-group">Group</Label>
                 <select id="new-category-group" class={selectClass} bind:value={newCategoryGroupId}>
                     {#each categoryGroups as group (group.id)}
-                        <option value={group.id}>{group.name}</option>
+                        <option value={group.id}>{group.name} · {group.direction}</option>
                     {/each}
                 </select>
             </div>

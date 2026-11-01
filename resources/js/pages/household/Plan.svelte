@@ -12,7 +12,7 @@
 </script>
 
 <script lang="ts">
-    import { Link, router } from '@inertiajs/svelte';
+    import { Link, router, setLayoutProps } from '@inertiajs/svelte';
     import PlanController from '@/actions/App/Http/Controllers/Household/PlanController';
     import AppHead from '@/components/AppHead.svelte';
     import InputError from '@/components/InputError.svelte';
@@ -23,11 +23,12 @@
     import { toUrl } from '@/lib/utils';
     import { index as planIndex } from '@/routes/household/plan';
     import { exportMethod as planExport } from '@/routes/household/plan';
+    import type { PlanToolbar } from '@/types';
 
     type Category = {
         id: string;
         name: string;
-        direction: 'income' | 'expense' | 'transfer' | 'adjustment';
+        direction: 'income' | 'expense' | 'transfer';
         budgetable: boolean;
         icon: string | null;
         planned: string;
@@ -46,6 +47,7 @@
     type Group = {
         id: string;
         name: string;
+        direction: 'income' | 'expense' | 'transfer';
         categories: Category[];
         planned_cents: number;
         activity_cents: number;
@@ -79,7 +81,7 @@
         };
         previous: { year: number; month: number };
         next: { year: number; month: number };
-        groupsForSelect: { id: string; name: string }[];
+        groupsForSelect: { id: string; name: string; direction: 'income' | 'expense' | 'transfer' }[];
         defaults: { apply_to_future_months: boolean };
     } = $props();
 
@@ -115,12 +117,17 @@
             buckets[sectionKey(group)].push(group);
         }
 
-        return [
+        return ([
             { key: 'income', label: 'Income', groups: buckets.income },
             { key: 'expense', label: 'Expenses', groups: buckets.expense },
             { key: 'transfer', label: 'Transfers', groups: buckets.transfer },
-        ].filter((section) => section.groups.length > 0);
+        ] satisfies BudgetSection[]).filter((section) => section.groups.length > 0);
     });
+
+    let moveOpen = $state(false);
+    let moveForm = $state({ from_category_id: '', to_category_id: '', amount: '0', memo: '' });
+    let moveErrors = $state<Record<string, string>>({});
+    let movePanel = $state({ top: 96, left: 96 });
 
     const pace = $derived(paceMarkerPercent());
     const moveReady = $derived(
@@ -130,17 +137,13 @@
             Number(moveForm.amount) > 0,
     );
 
-    let moveOpen = $state(false);
-    let moveForm = $state({ from_category_id: '', to_category_id: '', amount: '0', memo: '' });
-    let moveErrors = $state<Record<string, string>>({});
-    let movePanel = $state({ top: 96, left: 96 });
-
     let categoryOpen = $state(false);
-    let categoryForm = $state({ name: '', category_group_id: '', direction: 'expense', icon: '', starting_month: '', starting_balance: '0.00' });
+    let categoryForm = $state({ name: '', category_group_id: '', icon: '', starting_month: '', starting_balance: '0.00' });
     let categoryErrors = $state<Record<string, string>>({});
 
     let groupOpen = $state(false);
     let groupName = $state('');
+    let groupDirection = $state<'income' | 'expense' | 'transfer'>('expense');
     let groupErrors = $state<Record<string, string>>({});
 
     function openBudgetEditor(category: Category): void {
@@ -201,7 +204,7 @@
                 preserveScroll: true,
                 onSuccess: () => {
                     categoryOpen = false;
-                    categoryForm = { name: '', category_group_id: '', direction: 'expense', icon: '', starting_month: '', starting_balance: '0.00' };
+                    categoryForm = { name: '', category_group_id: '', icon: '', starting_month: '', starting_balance: '0.00' };
                 },
                 onError: (errors) => (categoryErrors = errors as Record<string, string>),
             },
@@ -212,8 +215,7 @@
         categoryErrors = {};
         categoryForm = {
             name: '',
-            category_group_id: groupsForSelect[0]?.id ?? '',
-            direction: 'expense',
+            category_group_id: groupsForSelect.find((group) => group.direction === 'expense')?.id ?? groupsForSelect[0]?.id ?? '',
             icon: '',
             starting_month: `${year}-${String(month).padStart(2, '0')}`,
             starting_balance: '0.00',
@@ -221,16 +223,21 @@
         categoryOpen = true;
     }
 
+    function openGroupDialog(): void {
+        groupOpen = true;
+    }
+
     function createGroup(): void {
         groupErrors = {};
         router.post(
             PlanController.storeGroup.url(),
-            { name: groupName, year, month },
+            { name: groupName, direction: groupDirection, year, month },
             {
                 preserveScroll: true,
                 onSuccess: () => {
                     groupOpen = false;
                     groupName = '';
+                    groupDirection = 'expense';
                 },
                 onError: (errors) => (groupErrors = errors as Record<string, string>),
             },
@@ -267,17 +274,7 @@
     }
 
     function sectionKey(group: Group): BudgetSection['key'] {
-        const directions = group.categories.map((category) => category.direction);
-
-        if (directions.length === 0 || directions.some((direction) => direction === 'expense')) {
-            return 'expense';
-        }
-
-        if (directions.every((direction) => direction === 'income')) {
-            return 'income';
-        }
-
-        return 'transfer';
+        return group.direction;
     }
 
     function paceMarkerPercent(): number {
@@ -380,9 +377,23 @@
             income: 'Income',
             expense: 'Expense',
             transfer: 'Transfer',
-            adjustment: 'Adjustment',
         }[direction];
     }
+
+    $effect(() => {
+        setLayoutProps<{
+            planToolbar: PlanToolbar | null;
+        }>({
+            planToolbar: {
+                monthLabel,
+                previousUrl: toUrl(monthQuery(previous)),
+                nextUrl: toUrl(monthQuery(next)),
+                todayUrl: toUrl(planIndex()),
+                onAddGroup: openGroupDialog,
+                onAddCategory: openCategoryDialog,
+            },
+        });
+    });
 </script>
 
 <AppHead title="Budget" />
@@ -395,8 +406,8 @@
     }}
 />
 
-<div class="mx-auto flex max-w-7xl flex-col gap-4 bg-white p-4 sm:p-6">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+<div class="flex w-full flex-col gap-4 bg-neutral-50 p-4" data-test="plan-page">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:hidden">
         <div class="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
                 {#snippet children(props)}
@@ -421,7 +432,7 @@
         </div>
     </div>
 
-    <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
+    <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_29rem]" data-test="plan-columns">
     <div class="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         {#if groups.length === 0}
             <div class="p-10 text-center">
@@ -530,10 +541,12 @@
                                                         <span>Apply this amount to all future months</span>
                                                     </label>
                                                     <InputError message={budgetErrors.apply_to_future_months} />
-                                                    <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
-                                                        <input type="checkbox" class="mt-1 size-4 accent-emerald-600" checked={category.rollover_enabled} onchange={(event) => setRollover(category, event.currentTarget.checked)} data-test="category-rollover" />
-                                                        <span>Roll a positive or negative balance into next month</span>
-                                                    </label>
+                                                    {#if category.direction === 'expense'}
+                                                        <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+                                                            <input type="checkbox" class="mt-1 size-4 accent-emerald-600" checked={category.rollover_enabled} onchange={(event) => setRollover(category, event.currentTarget.checked)} data-test="category-rollover" />
+                                                            <span>Roll a positive or negative balance into next month</span>
+                                                        </label>
+                                                    {/if}
                                                     <div class="mt-4 flex justify-end gap-2">
                                                         <Button type="button" size="sm" variant="ghost" onclick={() => (editingCategoryId = null)}>Cancel</Button>
                                                         <Button type="button" size="sm" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={() => saveBudget(category)}>Save</Button>
@@ -703,18 +716,9 @@
             <div class="grid gap-2">
                 <Label for="category-group">Group</Label>
                 <select id="category-group" class={selectClass} bind:value={categoryForm.category_group_id}>
-                    {#each groupsForSelect as group (group.id)}<option value={group.id}>{group.name}</option>{/each}
+                    {#each groupsForSelect as group (group.id)}<option value={group.id}>{group.name} · {group.direction}</option>{/each}
                 </select>
                 <InputError message={categoryErrors.category_group_id} />
-            </div>
-            <div class="grid gap-2">
-                <Label for="category-direction">Type</Label>
-                <select id="category-direction" class={selectClass} bind:value={categoryForm.direction}>
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="adjustment">Balance adjustment</option>
-                </select>
             </div>
             <div class="grid gap-2 sm:grid-cols-2">
                 <div class="grid gap-2">
@@ -743,6 +747,15 @@
         <DialogDescription>Groups organize categories. They do not have their own budgets.</DialogDescription>
         <form class="mt-5 space-y-4" onsubmit={(event) => { event.preventDefault(); createGroup(); }}>
             <div class="grid gap-2"><Label for="group-name">Group name</Label><Input id="group-name" bind:value={groupName} /><InputError message={groupErrors.name} /></div>
+            <div class="grid gap-2">
+                <Label for="group-direction">Type</Label>
+                <select id="group-direction" class={selectClass} bind:value={groupDirection}>
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                    <option value="transfer">Transfer</option>
+                </select>
+                <InputError message={groupErrors.direction} />
+            </div>
             <DialogFooter>
                 <Button type="button" variant="ghost" onclick={() => (groupOpen = false)}>Cancel</Button>
                 <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" data-test="submit-create-group">Create group</Button>

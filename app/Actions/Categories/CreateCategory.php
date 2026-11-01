@@ -14,7 +14,7 @@ class CreateCategory
     public function __construct(private CategoryService $categories) {}
 
     /**
-     * @param  array{name: string, category_group_id: string, direction: string, icon?: ?string, starting_month?: ?string, starting_balance_cents?: int, year?: int|string, month?: int|string}  $data
+     * @param  array{name: string, category_group_id: string, icon?: ?string, starting_month?: ?string, starting_balance_cents?: int, year?: int|string, month?: int|string}  $data
      */
     public function handle(array $data, Household $household): Category
     {

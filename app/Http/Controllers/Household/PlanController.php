@@ -38,7 +38,7 @@ class PlanController extends Controller
         $groups = $household->categoryGroups()
             ->where('archived', false)
             ->with(['categories' => function ($query): void {
-                $query->where('archived', false)->orderBy('sort_order')->orderBy('name');
+                $query->where('archived', false)->with('group:id,direction')->orderBy('sort_order')->orderBy('name');
             }])
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -52,7 +52,7 @@ class PlanController extends Controller
                     'id' => $category->id,
                     'name' => $category->name,
                     'direction' => $category->direction,
-                    'budgetable' => in_array($category->direction, ['income', 'expense'], true),
+                    'budgetable' => $category->isBudgetable(),
                     'icon' => $category->icon,
                     'planned' => Money::format($summary['planned_amount']),
                     'planned_cents' => $summary['planned_amount'],
@@ -71,6 +71,7 @@ class PlanController extends Controller
             return [
                 'id' => $group->id,
                 'name' => $group->name,
+                'direction' => $group->direction,
                 'categories' => $categories->all(),
                 'planned_cents' => $categories->sum('planned_cents'),
                 'activity_cents' => $categories->sum('activity_cents'),
@@ -122,7 +123,7 @@ class PlanController extends Controller
                 ->where('archived', false)
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->get(['id', 'name']),
+                ->get(['id', 'name', 'direction']),
             'defaults' => ['apply_to_future_months' => true],
         ]);
     }
@@ -134,7 +135,7 @@ class PlanController extends Controller
         $groups = $household->categoryGroups()
             ->where('archived', false)
             ->with(['categories' => function ($query): void {
-                $query->where('archived', false)->orderBy('sort_order')->orderBy('name');
+                $query->where('archived', false)->with('group:id,direction')->orderBy('sort_order')->orderBy('name');
             }])
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -153,7 +154,7 @@ class PlanController extends Controller
             foreach ($groups as $group) {
                 foreach ($group->categories as $category) {
                     $summary = $this->budget->summaryForMonth($category, $cursor->year, $cursor->month);
-                    $budgetable = in_array($category->direction, ['income', 'expense'], true);
+                    $budgetable = $category->isBudgetable();
                     $section = match ($category->direction) {
                         'income' => 'Income',
                         'expense' => 'Expenses',

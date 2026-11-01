@@ -19,7 +19,7 @@ class SetCategoryBudgetPlanRequest extends FormRequest
         return $category instanceof Category
             && ($this->user()?->can('view', $this->household()) ?? false)
             && $category->household_id === $this->household()->id
-            && in_array($category->direction, ['income', 'expense'], true);
+            && $category->isBudgetable();
     }
 
     protected function prepareForValidation(): void

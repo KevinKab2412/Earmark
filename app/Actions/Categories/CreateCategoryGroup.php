@@ -11,7 +11,7 @@ class CreateCategoryGroup
     public function __construct(private CategoryService $categories) {}
 
     /**
-     * @param  array{name: string}  $data
+     * @param  array{name: string, direction: string}  $data
      */
     public function handle(array $data, Household $household): CategoryGroup
     {

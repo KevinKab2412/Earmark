@@ -61,15 +61,18 @@ class TransferController extends Controller
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
             'categories' => $household->categories()
                 ->where('archived', false)
-                ->where('direction', 'transfer')
+                ->whereHas('group', fn ($query) => $query->where('direction', 'transfer'))
+                ->where('kind', 'standard')
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->get(['id', 'name']),
+                ->with('group:id,direction')
+                ->get(['id', 'name', 'category_group_id']),
             'defaults' => [
                 'date' => now()->toDateString(),
                 'transfer_category_id' => $household->categories()
                     ->where('archived', false)
-                    ->where('direction', 'transfer')
+                    ->whereHas('group', fn ($query) => $query->where('direction', 'transfer'))
+                    ->where('kind', 'standard')
                     ->orderBy('sort_order')
                     ->value('id'),
             ],

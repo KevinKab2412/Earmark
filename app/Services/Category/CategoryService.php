@@ -18,14 +18,14 @@ class CategoryService
     {
         return $household->categories()
             ->where('archived', false)
-            ->with('group:id,name,sort_order')
+            ->with('group:id,name,direction,sort_order')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
     }
 
     /**
-     * @param  array{name: string, category_group_id: string, direction: string, icon?: ?string, starting_month?: ?string, starting_balance_cents?: int, year?: int|string, month?: int|string}  $data
+     * @param  array{name: string, category_group_id: string, icon?: ?string, starting_month?: ?string, starting_balance_cents?: int, year?: int|string, month?: int|string}  $data
      */
     public function create(array $data, Household $household): Category
     {
@@ -39,12 +39,11 @@ class CategoryService
             'category_group_id' => $data['category_group_id'],
             'starting_month' => $startingMonth->toDateString(),
             'starting_balance' => (int) ($data['starting_balance_cents'] ?? 0),
-            'direction' => $data['direction'],
             'icon' => $data['icon'] ?? null,
             'household_id' => $household->id,
         ]);
 
-        if (in_array($category->direction, ['income', 'expense'], true)) {
+        if ($category->isBudgetable()) {
             CategoryBudgetPlan::query()->firstOrCreate(
                 [
                     'category_id' => $category->id,
@@ -58,7 +57,7 @@ class CategoryService
     }
 
     /**
-     * @param  array{name: string}  $data
+     * @param  array{name: string, direction: string}  $data
      */
     public function createGroup(array $data, Household $household): CategoryGroup
     {
@@ -69,5 +68,52 @@ class CategoryService
             'household_id' => $household->id,
             'sort_order' => $lastSortOrder + 10,
         ]);
+    }
+
+    /**
+     * @param  array{name: string, category_group_id: string, icon?: ?string, starting_month?: ?string, starting_balance_cents?: int}  $data
+     */
+    public function update(array $data, Category $category, Household $household): Category
+    {
+        abort_unless($category->household_id === $household->id, 404);
+
+        $startingMonth = array_key_exists('starting_month', $data) && $data['starting_month'] !== null
+            ? CarbonImmutable::createFromFormat('Y-m', $data['starting_month'])->startOfMonth()
+            : $category->starting_month;
+
+        $category->fill([
+            'name' => $data['name'],
+            'category_group_id' => $data['category_group_id'],
+            'icon' => $data['icon'] ?? null,
+            'starting_month' => $startingMonth?->toDateString(),
+            'starting_balance' => (int) ($data['starting_balance_cents'] ?? $category->starting_balance),
+        ])->save();
+
+        if ($category->isBudgetable() && $startingMonth !== null) {
+            $hasPlanForStartingMonth = CategoryBudgetPlan::query()
+                ->where('category_id', $category->id)
+                ->whereDate('effective_month', $startingMonth->toDateString())
+                ->exists();
+
+            if (! $hasPlanForStartingMonth) {
+                CategoryBudgetPlan::query()->create([
+                    'category_id' => $category->id,
+                    'effective_month' => $startingMonth->toDateString(),
+                    'planned_amount' => 0,
+                ]);
+            }
+        }
+
+        return $category;
+    }
+
+    /** @param array{name: string} $data */
+    public function updateGroup(array $data, CategoryGroup $categoryGroup, Household $household): CategoryGroup
+    {
+        abort_unless($categoryGroup->household_id === $household->id, 404);
+
+        $categoryGroup->update(['name' => $data['name']]);
+
+        return $categoryGroup;
     }
 }

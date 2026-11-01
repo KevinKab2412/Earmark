@@ -21,6 +21,7 @@ class CategoryGroupFactory extends Factory
         return [
             'household_id' => Household::factory(),
             'name' => fake()->unique()->words(2, true),
+            'direction' => 'expense',
             'sort_order' => 0,
             'archived' => false,
         ];

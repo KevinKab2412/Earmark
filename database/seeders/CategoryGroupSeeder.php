@@ -13,7 +13,7 @@ use Illuminate\Database\Seeder;
 class CategoryGroupSeeder extends Seeder
 {
     /**
-     * @var array<string, array{name: string, sort_order: int, direction: string, categories: list<string>, category_directions?: array<string, string>, category_icons?: array<string, string>, rollover: bool}>
+     * @var array<string, array{name: string, sort_order: int, direction: string, categories: list<string>, category_kinds?: array<string, string>, category_icons?: array<string, string>, rollover: bool}>
      */
     private array $defaults = [
         'income' => ['name' => 'Income', 'sort_order' => 0, 'direction' => 'income', 'categories' => ['Paychecks', 'Interest', 'Other Income'], 'rollover' => false],
@@ -26,7 +26,7 @@ class CategoryGroupSeeder extends Seeder
         'savings' => ['name' => 'Savings Goals', 'sort_order' => 70, 'direction' => 'expense', 'categories' => ['Emergency Fund', 'Vacation', 'Home Down Payment'], 'rollover' => true],
         'bills' => ['name' => 'Bills', 'sort_order' => 80, 'direction' => 'expense', 'categories' => ['Electricity', 'Internet', 'Phone'], 'rollover' => false],
         'other' => ['name' => 'Other', 'sort_order' => 100, 'direction' => 'expense', 'categories' => [], 'rollover' => false],
-        'transfers' => ['name' => 'Transfers', 'sort_order' => 110, 'direction' => 'transfer', 'categories' => ['Transfer', 'Credit Card Payment', 'Balance Adjustments'], 'category_directions' => ['Balance Adjustments' => 'adjustment'], 'category_icons' => ['Transfer' => '🔁', 'Credit Card Payment' => '💳', 'Balance Adjustments' => '⚖️'], 'rollover' => false],
+        'transfers' => ['name' => 'Transfers', 'sort_order' => 110, 'direction' => 'transfer', 'categories' => ['Transfer', 'Credit Card Payment', 'Balance Adjustments'], 'category_kinds' => ['Balance Adjustments' => 'balance_adjustment'], 'category_icons' => ['Transfer' => '🔁', 'Credit Card Payment' => '💳', 'Balance Adjustments' => '⚖️'], 'rollover' => false],
     ];
 
     public function run(?Household $household = null): void
@@ -38,8 +38,13 @@ class CategoryGroupSeeder extends Seeder
             foreach ($this->defaults as $definition) {
                 $group = CategoryGroup::query()->firstOrCreate(
                     ['household_id' => $target->id, 'name' => $definition['name']],
-                    ['sort_order' => $definition['sort_order'], 'archived' => false],
+                    ['direction' => $definition['direction'], 'sort_order' => $definition['sort_order'], 'archived' => false],
                 );
+                $group->fill([
+                    'direction' => $definition['direction'],
+                    'sort_order' => $definition['sort_order'],
+                    'archived' => false,
+                ])->save();
 
                 foreach ($definition['categories'] as $sortOrder => $name) {
                     $category = Category::query()->firstOrNew(['household_id' => $target->id, 'name' => $name]);
@@ -51,7 +56,7 @@ class CategoryGroupSeeder extends Seeder
                     }
                     $category->fill([
                         'category_group_id' => $group->id,
-                        'direction' => $definition['category_directions'][$name] ?? $definition['direction'],
+                        'kind' => $definition['category_kinds'][$name] ?? 'standard',
                         'icon' => $definition['category_icons'][$name] ?? null,
                         'sort_order' => $sortOrder,
                         'archived' => false,

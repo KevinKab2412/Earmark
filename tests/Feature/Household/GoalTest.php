@@ -17,7 +17,7 @@ use Illuminate\Database\QueryException;
 test('a save-up goal reads progress from its linked category balance', function () {
     $user = User::factory()->create();
     $household = $user->household();
-    $category = Category::factory()->create(['household_id' => $household->id, 'direction' => 'expense']);
+    $category = Category::factory()->create(['household_id' => $household->id]);
     CategoryBudgetPlan::query()->create([
         'category_id' => $category->id,
         'effective_month' => now()->startOfMonth()->toDateString(),
@@ -309,6 +309,31 @@ test('a debt goal reports the liability balance and ignores the payment category
             ->where('goals.0.name', 'Card payoff')
             ->where('goals.0.principal_formatted', '$70.00')
         );
+});
+
+test('a debt goal can use a transfer payment category without treating the payment as spending', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $account = Account::factory()->create([
+        'household_id' => $household->id,
+        'type' => 'credit_card',
+        'starting_balance' => -12000,
+    ]);
+    $paymentCategory = $household->categories()->where('name', 'Credit Card Payment')->firstOrFail();
+
+    $this->actingAs($user)->from(route('household.goals.index'))->post(route('household.goals.store'), [
+        'name' => 'Card payoff',
+        'type' => 'pay_down',
+        'target_amount' => 0,
+        'linked_account_id' => $account->id,
+        'payment_category_id' => $paymentCategory->id,
+    ])->assertRedirect(route('household.goals.index'))->assertSessionHasNoErrors();
+
+    $goal = Goal::query()->where('household_id', $household->id)->where('name', 'Card payoff')->firstOrFail();
+
+    expect($goal->payment_category_id)->toBe($paymentCategory->id)
+        ->and($paymentCategory->direction)->toBe('transfer')
+        ->and(app(GoalService::class)->principal($goal))->toBe(12000);
 });
 
 test('a goal cannot link another household category or account', function () {

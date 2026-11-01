@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Models\TransactionSplit;
 use App\Models\User;
 use Database\Seeders\CategoryGroupSeeder;
+use Illuminate\Support\Facades\Schema;
 
 test('account factory produces a valid account with ULID and integer cents', function () {
     $account = Account::factory()->create();
@@ -31,6 +32,18 @@ test('category factory produces a valid category in a group', function () {
         ->and($category->household_id)->not->toBeEmpty();
 });
 
+test('category direction is derived from its group and is not stored twice', function () {
+    $category = Category::factory()->create();
+    $group = $category->group;
+
+    expect(Schema::hasColumn('categories', 'direction'))->toBeFalse()
+        ->and($category->direction)->toBe('expense');
+
+    $group->update(['direction' => 'income']);
+
+    expect($category->fresh()->direction)->toBe('income');
+});
+
 test('category groups seed transfer and adjustment categories together once per household', function () {
     $household = Household::factory()->create();
     $seeder = new CategoryGroupSeeder;
@@ -49,7 +62,9 @@ test('category groups seed transfer and adjustment categories together once per 
         ->and($categories['Transfer']->category_group_id)->toBe($categories['Balance Adjustments']->category_group_id)
         ->and($categories['Transfer']->direction)->toBe('transfer')
         ->and($categories['Credit Card Payment']->direction)->toBe('transfer')
-        ->and($categories['Balance Adjustments']->direction)->toBe('adjustment')
+        ->and($categories['Balance Adjustments']->direction)->toBe('transfer')
+        ->and($categories['Balance Adjustments']->kind)->toBe('balance_adjustment')
+        ->and($categories->every(fn ($category): bool => $category->direction === $category->group->direction))->toBeTrue()
         ->and($categories['Transfer']->icon)->toBe('🔁')
         ->and($household->categories()->where('name', 'Transfer')->count())->toBe(1);
 });

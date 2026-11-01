@@ -95,8 +95,8 @@ class TransactionController extends Controller
             'transactions' => $transactions,
             'filters' => $filters,
             'accounts' => $household->accounts()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name', 'direction', 'category_group_id']),
-            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
+            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'direction']),
             'sources' => ['manual', 'imported_csv', 'imported_ofx', 'imported_qif', 'imported_pdf'],
             'activities' => $activities,
             'members' => $household->members()->get(['users.id', 'users.name'])

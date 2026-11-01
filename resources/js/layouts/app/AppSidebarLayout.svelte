@@ -5,13 +5,15 @@
     import AppSidebar from '@/components/AppSidebar.svelte';
     import AppSidebarHeader from '@/components/AppSidebarHeader.svelte';
     import { Toaster } from '@/components/ui/sonner';
-    import type { BreadcrumbItem } from '@/types';
+    import type { BreadcrumbItem, PlanToolbar } from '@/types';
 
     let {
         breadcrumbs = [],
+        planToolbar = null,
         children,
     }: {
         breadcrumbs?: BreadcrumbItem[];
+        planToolbar?: PlanToolbar | null;
         children?: Snippet;
     } = $props();
 </script>
@@ -19,7 +21,7 @@
 <AppShell variant="sidebar">
     <AppSidebar />
     <AppContent variant="sidebar" class="min-w-0 overflow-x-clip">
-        <AppSidebarHeader {breadcrumbs} />
+        <AppSidebarHeader {breadcrumbs} {planToolbar} />
         {@render children?.()}
     </AppContent>
     <Toaster />

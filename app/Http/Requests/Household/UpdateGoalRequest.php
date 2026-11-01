@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Household;
 
 use App\Http\Requests\Household\Concerns\AuthorizesHousehold;
+use App\Models\CategoryGroup;
 use App\Models\Goal;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,8 +38,8 @@ class UpdateGoalRequest extends FormRequest
             'required_payment' => ['nullable', 'integer', 'min:0'],
             'principal' => ['nullable', 'integer'],
             'linked_account_id' => ['nullable', 'string', Rule::exists('accounts', 'id')->where('household_id', $householdId)->whereIn('type', ['credit_card', 'mortgage', 'loan'])],
-            'linked_category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)->whereIn('direction', ['income', 'expense'])],
-            'payment_category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)->where('direction', 'expense')],
+            'linked_category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)->where('kind', 'standard')->where(fn ($query) => $query->whereIn('category_group_id', CategoryGroup::query()->where('direction', 'expense')->select('id')->toBase()))],
+            'payment_category_id' => ['nullable', 'string', Rule::exists('categories', 'id')->where('household_id', $householdId)->where('kind', 'standard')->where(fn ($query) => $query->whereIn('category_group_id', CategoryGroup::query()->whereIn('direction', ['expense', 'transfer'])->select('id')->toBase()))],
             'linked_position_id' => ['nullable', 'string', Rule::exists('financial_positions', 'id')->where('household_id', $householdId)->where('classification', 'liability')],
             'status' => ['nullable', Rule::in(['active', 'achieved', 'archived'])],
             'notes' => ['nullable', 'string', 'max:255'],

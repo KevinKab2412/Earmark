@@ -14,6 +14,7 @@
     import Repeat from '@lucide/svelte/icons/repeat';
     import Scale from '@lucide/svelte/icons/scale';
     import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
+    import Tags from '@lucide/svelte/icons/tags';
     import Target from '@lucide/svelte/icons/target';
     import TrendingUp from '@lucide/svelte/icons/trending-up';
     import Upload from '@lucide/svelte/icons/upload';
@@ -36,6 +37,7 @@
     import { dashboard } from '@/routes';
     import { index as accounts } from '@/routes/household/accounts';
     import { index as assumptions } from '@/routes/household/assumptions';
+    import { index as categories } from '@/routes/household/categories';
     import { index as goals } from '@/routes/household/goals';
     import { index as holdings } from '@/routes/household/holdings';
     import { index as importStatements } from '@/routes/household/import';
@@ -74,6 +76,7 @@
         { title: 'Import', href: importStatements(), icon: Upload },
         { title: 'Rules', href: rules(), icon: ListFilter },
         { title: 'Transfers', href: transfers(), icon: ArrowRightLeft },
+        { title: 'Categories', href: categories(), icon: Tags },
         { title: 'Reconcile', href: reconcile(), icon: Scale },
         { title: 'Net worth', href: netWorth(), icon: TrendingUp },
         { title: 'Registered', href: registered(), icon: BadgeCheck },

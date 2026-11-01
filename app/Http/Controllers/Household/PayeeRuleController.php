@@ -53,7 +53,7 @@ class PayeeRuleController extends Controller
 
         return Inertia::render('household/Rules', [
             'rules' => $rules,
-            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
         ]);
     }
 

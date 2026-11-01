@@ -162,8 +162,8 @@ class ImportController extends Controller
                 'imported_count' => $statementUpload->imported_transaction_count,
             ],
             'rows' => $rows,
-            'categories' => $household->categories()->where('archived', false)->orderBy('name')->get(['id', 'name']),
-            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            'categories' => $household->categories()->where('archived', false)->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
+            'categoryGroups' => $household->categoryGroups()->where('archived', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'direction']),
         ]);
     }
 

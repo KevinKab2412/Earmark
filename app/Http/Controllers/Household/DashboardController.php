@@ -9,13 +9,12 @@ use App\Models\Category;
 use App\Models\Goal;
 use App\Models\Holding;
 use App\Models\RecurringSchedule;
-use App\Models\Scenario;
-use App\Models\TransactionSplit;
 use App\Services\CategoryBudgetService;
 use App\Services\NetWorth\SnapshotService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -23,7 +22,7 @@ class DashboardController extends Controller
 {
     use ResolvesHousehold;
 
-    public const CARDS = ['budget', 'top_categories', 'review_queue', 'recurring', 'goals', 'net_worth', 'investments', 'scenarios'];
+    public const CARDS = ['budget', 'net_worth', 'goals', 'spending', 'transactions', 'recurring', 'investments'];
 
     public function __construct(
         private CategoryBudgetService $budget,
@@ -37,13 +36,15 @@ class DashboardController extends Controller
         $month = (int) now()->month;
         $budgetCategories = $household->categories()
             ->where('archived', false)
-            ->whereIn('direction', ['income', 'expense'])
+            ->whereHas('group', fn ($query) => $query->whereIn('direction', ['income', 'expense']))
+            ->with('group:id,direction')
             ->get();
 
         $budgetRows = $budgetCategories->map(function (Category $category) use ($year, $month): array {
             return [
                 'id' => $category->id,
                 'name' => $category->name,
+                'direction' => $category->direction,
                 ...$this->budget->summaryForMonth($category, $year, $month),
             ];
         });
@@ -56,93 +57,14 @@ class DashboardController extends Controller
         $snapshot = $this->snapshot->forHousehold($household);
         $plan = $household->plans()->latest()->first();
 
-        $monthStart = now()->startOfMonth()->toDateString();
-        $monthEnd = now()->endOfMonth()->toDateString();
-        $directSpend = $household->transactions()
-            ->whereNull('transfer_pair_id')
-            ->where('is_split', false)
-            ->whereNotNull('category_id')
-            ->whereHas('category', fn ($query) => $query->where('direction', 'expense'))
-            ->where('amount', '<', 0)
-            ->whereBetween('date', [$monthStart, $monthEnd])
-            ->get(['category_id', 'amount']);
-
-        $splitSpend = TransactionSplit::query()
-            ->whereNotNull('category_id')
-            ->where('amount', '<', 0)
-            ->whereHas('transaction', function ($query) use ($household, $monthStart, $monthEnd): void {
-                $query->where('household_id', $household->id)
-                    ->whereNull('transfer_pair_id')
-                    ->whereBetween('date', [$monthStart, $monthEnd]);
-            })
-            ->whereHas('category', fn ($query) => $query->where('direction', 'expense'))
-            ->get(['category_id', 'amount']);
-
-        $categorySpend = $directSpend->concat($splitSpend)
-            ->groupBy('category_id')
-            ->map(fn ($rows, string $categoryId): object => (object) [
-                'category_id' => $categoryId,
-                'total_cents' => (int) $rows->sum('amount'),
-            ])
-            ->sortBy('total_cents')
-            ->take(6)
-            ->values();
-
-        $categoryNames = Category::query()
-            ->whereIn('id', $categorySpend->pluck('category_id'))
-            ->where('direction', 'expense')
-            ->get(['id', 'name', 'direction'])
-            ->keyBy('id');
-
-        $maxSpend = abs((int) ($categorySpend->min('total_cents') ?? 0)) ?: 1;
-        $monthSpendCents = (int) $household->transactions()
-            ->whereNull('transfer_pair_id')
-            ->where('is_split', false)
-            ->where('amount', '<', 0)
-            ->where(function ($query): void {
-                $query->whereNull('category_id')
-                    ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('direction', 'expense'));
-            })
-            ->whereBetween('date', [$monthStart, $monthEnd])
-            ->sum('amount') + (int) TransactionSplit::query()
-            ->where('amount', '<', 0)
-            ->whereHas('transaction', function ($query) use ($household, $monthStart, $monthEnd): void {
-                $query->where('household_id', $household->id)
-                    ->whereNull('transfer_pair_id')
-                    ->whereBetween('date', [$monthStart, $monthEnd]);
-            })
-            ->where(function ($query): void {
-                $query->whereNull('category_id')
-                    ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('direction', 'expense'));
-            })
-            ->sum('amount');
-
-        $topCategories = $categorySpend->map(function ($row) use ($categoryNames, $maxSpend): array {
-            $spent = abs((int) $row->total_cents);
-
-            return [
-                'name' => $categoryNames[$row->category_id]?->name ?? __('Uncategorized'),
-                'type' => $categoryNames[$row->category_id]?->direction,
-                'spent' => Money::format($spent),
-                'ratio' => round($spent / $maxSpend, 4),
-            ];
-        })->values();
-
         return Inertia::render('household/Overview', [
             'availableCards' => self::CARDS,
-            'enabledCards' => $household->overview_cards ?? self::CARDS,
+            'enabledCards' => $this->enabledOverviewCards($household->overview_cards),
             'cards' => [
                 'budget' => [
                     'planned' => Money::format((int) $budgetRows->sum('planned_amount')),
                     'available' => Money::format((int) $budgetRows->sum('available')),
                     'over_budget' => $overspent,
-                ],
-                'top_categories' => [
-                    'items' => $topCategories,
-                    'total' => Money::format(abs($monthSpendCents)),
-                ],
-                'review_queue' => [
-                    'count' => $household->transactions()->whereNull('transfer_pair_id')->where('reviewed', false)->count(),
                 ],
                 'recurring' => [
                     'count' => RecurringSchedule::query()->where('household_id', $household->id)->where('status', 'confirmed')->count(),
@@ -161,11 +83,43 @@ class DashboardController extends Controller
                     'total' => Money::format((int) Holding::query()->where('household_id', $household->id)->sum('market_value_cents')),
                     'count' => Holding::query()->where('household_id', $household->id)->count(),
                 ],
-                'scenarios' => [
-                    'count' => Scenario::query()->where('household_id', $household->id)->count(),
-                ],
+                'spending' => $this->spendingCard($budgetRows),
             ],
         ]);
+    }
+
+    /**
+     * This month's expense-category activity, largest spent first.
+     * Income, transfers, refunds, and categories with no spending are omitted.
+     *
+     * @param  Collection<int, array{id: string, name: string, direction: string, planned_amount: int, activity: int, carryover: int, opening_balance: int, available: int, rollover_enabled: bool}>  $budgetRows
+     * @return array{series: list<array{name: string, spent: string, width: float}>, total: string}
+     */
+    private function spendingCard(Collection $budgetRows): array
+    {
+        $spentRows = $budgetRows
+            ->filter(fn (array $row): bool => $row['direction'] === 'expense' && $row['activity'] < 0)
+            ->sortByDesc(fn (array $row): int => abs((int) $row['activity']))
+            ->values();
+
+        $largest = abs((int) ($spentRows->first()['activity'] ?? 0));
+
+        $series = $spentRows->map(function (array $row) use ($largest): array {
+            $spent = abs((int) $row['activity']);
+
+            return [
+                'name' => $row['name'],
+                'spent' => Money::format($spent),
+                'width' => $largest === 0 ? 0.0 : round(($spent / $largest) * 100, 2),
+            ];
+        })->all();
+
+        $total = (int) $spentRows->sum(fn (array $row): int => abs((int) $row['activity']));
+
+        return [
+            'series' => $series,
+            'total' => Money::format($total),
+        ];
     }
 
     public function updateCards(UpdateOverviewCardsRequest $request): RedirectResponse
@@ -176,5 +130,33 @@ class DashboardController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Overview updated.')]);
 
         return back();
+    }
+
+    /**
+     * Saved lists may still name cards this overview no longer offers.
+     * Valid keys stay in their stored order. When none remain, the current
+     * default set is shown and the stored list is left unchanged.
+     *
+     * @return list<string>
+     */
+    private function enabledOverviewCards(mixed $stored): array
+    {
+        if (! is_array($stored)) {
+            return self::CARDS;
+        }
+
+        $enabled = [];
+
+        foreach ($stored as $key) {
+            if (is_string($key) && in_array($key, self::CARDS, true)) {
+                $enabled[] = $key;
+            }
+        }
+
+        if ($enabled === []) {
+            return self::CARDS;
+        }
+
+        return $enabled;
     }
 }

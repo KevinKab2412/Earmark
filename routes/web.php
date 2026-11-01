@@ -3,6 +3,7 @@
 use App\Http\Controllers\Household\AccountController;
 use App\Http\Controllers\Household\AssumptionController;
 use App\Http\Controllers\Household\CategoryController;
+use App\Http\Controllers\Household\CategoryGroupController;
 use App\Http\Controllers\Household\DashboardController;
 use App\Http\Controllers\Household\GoalController;
 use App\Http\Controllers\Household\HoldingController;
@@ -61,6 +62,10 @@ Route::middleware(['auth', 'verified', EnsureAdvisorReadOnly::class])->group(fun
     Route::delete('/household/transactions/{transaction}', [TransactionController::class, 'destroy'])->name('household.transactions.destroy');
 
     Route::post('/household/categories', [CategoryController::class, 'store'])->name('household.categories.store');
+    Route::get('/household/categories', [CategoryController::class, 'index'])->name('household.categories.index');
+    Route::patch('/household/categories/{category}', [CategoryController::class, 'update'])->name('household.categories.update');
+    Route::post('/household/category-groups', [CategoryGroupController::class, 'store'])->name('household.category-groups.store');
+    Route::patch('/household/category-groups/{categoryGroup}', [CategoryGroupController::class, 'update'])->name('household.category-groups.update');
 
     Route::get('/household/import', [ImportController::class, 'index'])->name('household.import.index');
     Route::post('/household/import', [ImportController::class, 'store'])->name('household.import.store');

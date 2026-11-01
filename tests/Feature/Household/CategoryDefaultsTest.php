@@ -38,7 +38,8 @@ test('a new household gets fresh category defaults instead of bucket plans', fun
     ])
         ->and($transfers[0]->direction)->toBe('transfer')
         ->and($transfers[1]->direction)->toBe('transfer')
-        ->and($transfers[2]->direction)->toBe('adjustment')
+        ->and($transfers[2]->direction)->toBe('transfer')
+        ->and($transfers[2]->kind)->toBe('balance_adjustment')
         ->and($transfers[0]->icon)->toBe('🔁')
         ->and($transfers[1]->icon)->toBe('💳')
         ->and($transfers[2]->icon)->toBe('⚖️');
@@ -60,7 +61,8 @@ test('a new household gets fresh category defaults instead of bucket plans', fun
     $transfer = $transfers[0];
 
     expect($transfer->budgetPlans()->count())->toBe(0)
-        ->and(in_array($transfer->direction, ['income', 'expense'], true))->toBeFalse();
+        ->and(in_array($transfer->direction, ['income', 'expense'], true))->toBeFalse()
+        ->and($transfers->every(fn ($category): bool => $category->direction === $category->group->direction))->toBeTrue();
 
     $emergencyFund = $household->categories()->where('name', 'Emergency Fund')->firstOrFail();
 

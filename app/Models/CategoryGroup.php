@@ -14,11 +14,16 @@ class CategoryGroup extends Model
     /** @use HasFactory<CategoryGroupFactory> */
     use HasFactory, HasUlids;
 
-    protected $fillable = ['household_id', 'name', 'sort_order', 'archived'];
+    public const DIRECTIONS = ['income', 'expense', 'transfer'];
+
+    protected $fillable = ['household_id', 'name', 'direction', 'sort_order', 'archived'];
 
     protected function casts(): array
     {
-        return ['sort_order' => 'integer', 'archived' => 'boolean'];
+        return [
+            'sort_order' => 'integer',
+            'archived' => 'boolean',
+        ];
     }
 
     /**

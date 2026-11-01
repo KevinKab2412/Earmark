@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\CategoryGroup;
 use App\Models\Transaction;
 use App\Models\User;
 
@@ -45,7 +46,7 @@ it('creates a category inline from the edit modal', function () {
         ->click('@edit-new-category')
         ->assertSee('Create a category')
         ->fill('@new-category-name', 'Salary')
-        ->select('#new-category-direction', 'income')
+        ->select('#new-category-group', CategoryGroup::query()->where('household_id', $user->household()->id)->where('direction', 'income')->value('id'))
         ->click('@new-category-save')
         ->assertDontSee('Create a category')
         ->assertNoJavaScriptErrors();
@@ -53,7 +54,7 @@ it('creates a category inline from the edit modal', function () {
     $this->assertDatabaseHas('categories', [
         'household_id' => $user->household()->id,
         'name' => 'Salary',
-        'direction' => 'income',
+        'category_group_id' => CategoryGroup::query()->where('household_id', $user->household()->id)->where('direction', 'income')->value('id'),
     ]);
 });
 

@@ -61,14 +61,14 @@ class ReportingService
         $isIncome = $direction === 'income';
         $matchesDirection = function ($query) use ($direction): void {
             $query->whereNull('category_id')
-                ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('direction', $direction));
+                ->orWhereHas('category.group', fn ($groupQuery) => $groupQuery->where('direction', $direction));
         };
 
         $transactions = $this->query($household, $filters)
             ->where('is_split', false)
             ->where($matchesDirection)
             ->when($isIncome, fn ($query) => $query->where('amount', '>', 0), fn ($query) => $query->where('amount', '<', 0))
-            ->with('category:id,name,direction')
+            ->with('category:id,name')
             ->get(['id', 'category_id', 'amount']);
 
         $splits = TransactionSplit::query()
@@ -83,7 +83,7 @@ class ReportingService
                     ->when(! empty($filters['account_id']), fn ($q) => $q->where('account_id', $filters['account_id']));
             })
             ->when(! empty($filters['category_id']), fn ($query) => $query->where('category_id', $filters['category_id']))
-            ->with('category:id,name,direction')
+            ->with('category:id,name')
             ->get(['category_id', 'amount']);
 
         return $transactions->map(fn (Transaction $transaction): array => [
@@ -185,7 +185,7 @@ class ReportingService
             ->where('excluded_from_reports', false)
             ->where(function (Builder $query): void {
                 $query->whereNull('category_id')
-                    ->orWhereHas('category', fn (Builder $categoryQuery) => $categoryQuery->whereIn('direction', ['income', 'expense']));
+                    ->orWhereHas('category.group', fn (Builder $groupQuery) => $groupQuery->whereIn('direction', ['income', 'expense']));
             })
             ->when(! empty($filters['from']), fn (Builder $q) => $q->whereDate('date', '>=', $filters['from']))
             ->when(! empty($filters['to']), fn (Builder $q) => $q->whereDate('date', '<=', $filters['to']))

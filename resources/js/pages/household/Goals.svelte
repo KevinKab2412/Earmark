@@ -24,6 +24,7 @@
     import { Label } from '@/components/ui/label';
 
     type Option = { id: string; name: string };
+    type PaymentCategory = Option & { direction: 'expense' | 'transfer' };
 
     type Goal = {
         id: string;
@@ -33,6 +34,7 @@
         target_date: string | null;
         linked_to: string | null;
         payment_category: string | null;
+        payment_category_direction?: 'expense' | 'transfer' | null;
         progress?: { current: string; remaining: string; percent: number };
         principal_formatted?: string;
         apr?: string | null;
@@ -53,7 +55,7 @@
         types: string[];
         accounts: Option[];
         categories: Option[];
-        paymentCategories: Option[];
+        paymentCategories: PaymentCategory[];
         positions: Option[];
         defaults: { target_date: string };
     } = $props();
@@ -63,6 +65,7 @@
 
     let showForm = $state(false);
     let formType = $state('save_up');
+    let debtSource = $state<'position' | 'account'>('position');
 
     function move(i: number, direction: -1 | 1): void {
         const next = i + direction;
@@ -196,27 +199,38 @@
                         <InputError message={errors.required_payment} />
                     </div>
                     <div class="grid gap-2">
-                        <Label for="goal-liability">Liability position</Label>
-                        <select id="goal-liability" name="linked_position_id" class={selectClass}>
-                            <option value="">Choose a liability position</option>
-                            {#each positions as position (position.id)}<option value={position.id}>{position.name}</option>{/each}
+                        <Label for="goal-debt-source">Debt balance</Label>
+                        <select id="goal-debt-source" class={selectClass} bind:value={debtSource}>
+                            <option value="position">Liability position</option>
+                            <option value="account">Debt account</option>
                         </select>
-                        <InputError message={errors.linked_position_id} />
                     </div>
-                    <div class="grid gap-2">
-                        <Label for="goal-debt-account">Or debt account</Label>
-                        <select id="goal-debt-account" name="linked_account_id" class={selectClass}>
-                            <option value="">Choose a debt account</option>
-                            {#each accounts as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
-                        </select>
-                        <InputError message={errors.linked_account_id} />
-                    </div>
+                    {#if debtSource === 'position'}
+                        <div class="grid gap-2">
+                            <Label for="goal-liability">Liability position</Label>
+                            <select id="goal-liability" name="linked_position_id" class={selectClass} required>
+                                <option value="">Choose a liability position</option>
+                                {#each positions as position (position.id)}<option value={position.id}>{position.name}</option>{/each}
+                            </select>
+                            <InputError message={errors.linked_position_id} />
+                        </div>
+                    {:else}
+                        <div class="grid gap-2">
+                            <Label for="goal-debt-account">Debt account</Label>
+                            <select id="goal-debt-account" name="linked_account_id" class={selectClass} required>
+                                <option value="">Choose a debt account</option>
+                                {#each accounts as account (account.id)}<option value={account.id}>{account.name}</option>{/each}
+                            </select>
+                            <InputError message={errors.linked_account_id} />
+                        </div>
+                    {/if}
                     <div class="grid gap-2">
                         <Label for="goal-payment-category">Payment category (optional)</Label>
                         <select id="goal-payment-category" name="payment_category_id" class={selectClass}>
                             <option value="">(none)</option>
-                            {#each paymentCategories as category (category.id)}<option value={category.id}>{category.name}</option>{/each}
+                            {#each paymentCategories as category (category.id)}<option value={category.id}>{category.name} · {category.direction}</option>{/each}
                         </select>
+                        <p class="text-xs text-muted-foreground">Transfer payment categories track payments without counting them as expenses.</p>
                     </div>
                 {/if}
 

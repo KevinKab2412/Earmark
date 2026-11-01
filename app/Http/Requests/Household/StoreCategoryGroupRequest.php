@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Household;
 
 use App\Http\Requests\Household\Concerns\AuthorizesHousehold;
+use App\Models\CategoryGroup;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,6 +17,7 @@ class StoreCategoryGroupRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'direction' => ['required', Rule::in(CategoryGroup::DIRECTIONS)],
             'name' => [
                 'required',
                 'string',

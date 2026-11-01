@@ -71,7 +71,7 @@ test('a category and category group can be created from the plan', function () {
     $household = $user->household();
 
     $this->actingAs($user)
-        ->post(route('household.plan.groups.store'), ['name' => 'Pets'])
+        ->post(route('household.plan.groups.store'), ['name' => 'Pets', 'direction' => 'expense'])
         ->assertRedirect();
 
     $group = CategoryGroup::query()->where('household_id', $household->id)->where('name', 'Pets')->firstOrFail();
@@ -80,7 +80,6 @@ test('a category and category group can be created from the plan', function () {
         ->post(route('household.plan.categories.store'), [
             'name' => 'Pet Care',
             'category_group_id' => $group->id,
-            'direction' => 'expense',
             'icon' => null,
             'year' => now()->year,
             'month' => now()->month,
@@ -91,7 +90,8 @@ test('a category and category group can be created from the plan', function () {
     $category = Category::query()->where('household_id', $household->id)->where('name', 'Pet Care')->firstOrFail();
 
     expect($category->category_group_id)->toBe($group->id)
-        ->and($category->direction)->toBe('expense');
+        ->and($category->direction)->toBe('expense')
+        ->and($group->direction)->toBe('expense');
     expect($category->budgetPlans()
         ->whereDate('effective_month', now()->startOfMonth()->toDateString())
         ->value('planned_amount'))->toBe(0);
@@ -136,7 +136,7 @@ test('the plan separates income expenses and transfers and leaves groups without
             ->where('categories', fn ($categories): bool => collect($categories)->contains(
                 fn (array $row): bool => $row['name'] === 'Transfer' && $row['budgetable'] === false && $row['direction'] === 'transfer',
             ) && collect($categories)->contains(
-                fn (array $row): bool => $row['name'] === 'Balance Adjustments' && $row['budgetable'] === false && $row['direction'] === 'adjustment',
+                fn (array $row): bool => $row['name'] === 'Balance Adjustments' && $row['budgetable'] === false && $row['direction'] === 'transfer',
             ))
         );
 });
@@ -147,7 +147,6 @@ test('a plan edit can stay in one month or cover this month and later months', f
     $category = Category::factory()->create([
         'household_id' => $user->household()->id,
         'name' => 'Scoped Plan',
-        'direction' => 'expense',
         'starting_month' => '2026-01-01',
         'starting_balance' => 0,
     ]);
@@ -195,7 +194,6 @@ test('rollover on carries this month available into next month including a negat
     $category = Category::factory()->create([
         'household_id' => $household->id,
         'name' => 'Rollover Probe',
-        'direction' => 'expense',
         'starting_month' => '2026-03-01',
         'starting_balance' => 0,
     ]);
@@ -227,13 +225,31 @@ test('rollover on carries this month available into next month including a negat
     expect($budget->summaryForMonth($category, 2026, 4)['carryover'])->toBe(0);
 });
 
+test('income categories cannot enable rollover', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $incomeGroup = $household->categoryGroups()->where('name', 'Income')->firstOrFail();
+    $category = Category::factory()->create([
+        'household_id' => $household->id,
+        'category_group_id' => $incomeGroup->id,
+        'name' => 'Bonus Income',
+    ]);
+
+    $this->actingAs($user)->post(route('household.plan.categories.rollover', $category), [
+        'enabled' => true,
+        'year' => now()->year,
+        'month' => now()->month,
+    ])->assertForbidden();
+
+    $this->assertDatabaseMissing('category_rollover_settings', ['category_id' => $category->id]);
+});
+
 test('another household cannot read or change a plan', function () {
     $owner = User::factory()->create();
     $intruder = User::factory()->create();
     Category::factory()->create([
         'household_id' => $owner->household()->id,
         'name' => 'Alpha Only Category',
-        'direction' => 'expense',
     ]);
     $secret = $owner->household()->categories()->where('name', 'Alpha Only Category')->firstOrFail();
 

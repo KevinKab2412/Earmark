@@ -37,7 +37,6 @@ class StoreCategoryRequest extends FormRequest
                 'string',
                 Rule::exists('category_groups', 'id')->where('household_id', $this->household()->id),
             ],
-            'direction' => ['required', Rule::in(['income', 'expense', 'transfer', 'adjustment'])],
             'icon' => ['nullable', 'string', 'max:80'],
             'starting_month' => ['nullable', 'date_format:Y-m'],
             'starting_balance' => ['nullable', 'string', 'max:40'],

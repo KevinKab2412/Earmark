@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\CategoryFactory;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,13 +15,15 @@ class Category extends Model
     /** @use HasFactory<CategoryFactory> */
     use HasFactory, HasUlids;
 
+    protected $appends = ['direction'];
+
     protected $fillable = [
         'household_id',
         'category_group_id',
         'starting_month',
         'starting_balance',
         'name',
-        'direction',
+        'kind',
         'icon',
         'sort_order',
         'archived',
@@ -38,6 +41,21 @@ class Category extends Model
             'starting_month' => 'date',
             'starting_balance' => 'integer',
         ];
+    }
+
+    protected $attributes = [
+        'kind' => 'standard',
+    ];
+
+    protected function direction(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->group?->direction);
+    }
+
+    public function isBudgetable(): bool
+    {
+        return $this->kind === 'standard'
+            && in_array($this->direction, ['income', 'expense'], true);
     }
 
     /**

@@ -95,8 +95,8 @@
         transactions: Paginator;
         filters: Filters;
         accounts: Option[];
-        categories: (Option & { direction: 'income' | 'expense' | 'transfer' | 'adjustment'; category_group_id: string })[];
-        categoryGroups: Option[];
+        categories: (Option & { direction: 'income' | 'expense' | 'transfer'; category_group_id: string })[];
+        categoryGroups: (Option & { direction: 'income' | 'expense' | 'transfer' })[];
         sources: string[];
         activities: { id: string; action: string; description: string; user: string | null; at: string | null }[];
         currentUserId: number;
@@ -225,14 +225,12 @@
     let showNewCategory = $state(false);
     let newCategoryName = $state('');
     let newCategoryGroupId = $state('');
-    let newCategoryDirection = $state<'income' | 'expense'>('expense');
     let creatingCategory = $state(false);
     let newCategoryError = $state<string | null>(null);
 
     function openNewCategory(): void {
         newCategoryName = '';
-        newCategoryDirection = 'expense';
-        newCategoryGroupId = categories.find((category) => category.direction === 'expense')?.category_group_id ?? categoryGroups[0]?.id ?? '';
+        newCategoryGroupId = categoryGroups.find((group) => group.direction === 'expense')?.id ?? categoryGroups[0]?.id ?? '';
         newCategoryError = null;
         showNewCategory = true;
     }
@@ -247,7 +245,7 @@
 
         router.post(
             CategoryController.store.url(),
-            { name: newCategoryName, category_group_id: newCategoryGroupId, direction: newCategoryDirection },
+            { name: newCategoryName, category_group_id: newCategoryGroupId },
             {
                 preserveScroll: true,
                 preserveState: true,
@@ -264,7 +262,6 @@
                     newCategoryError =
                         formErrors.name ??
                         formErrors.category_group_id ??
-                        formErrors.direction ??
                         'Could not create the category.';
                 },
                 onFinish: () => (creatingCategory = false),
@@ -726,15 +723,8 @@
                     <Label for="new-category-group">Group</Label>
                     <select id="new-category-group" class={selectClass} bind:value={newCategoryGroupId}>
                         {#each categoryGroups as group (group.id)}
-                            <option value={group.id}>{group.name}</option>
+                            <option value={group.id}>{group.name} · {group.direction}</option>
                         {/each}
-                    </select>
-                </div>
-                <div class="grid gap-1">
-                    <Label for="new-category-direction">Type</Label>
-                    <select id="new-category-direction" class={selectClass} bind:value={newCategoryDirection}>
-                        <option value="expense">Expense</option>
-                        <option value="income">Income</option>
                     </select>
                 </div>
                 <InputError message={newCategoryError ?? undefined} />

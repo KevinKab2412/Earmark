@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Household;
 
 use App\Http\Requests\Household\Concerns\AuthorizesHousehold;
+use App\Models\CategoryGroup;
 use App\Models\Transaction;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,7 +31,8 @@ class UpdateTransferRequest extends FormRequest
         $householdId = $this->household()->id;
         $transferCategory = Rule::exists('categories', 'id')
             ->where('household_id', $householdId)
-            ->where('direction', 'transfer');
+            ->where(fn ($query) => $query->whereIn('category_group_id', CategoryGroup::query()->where('direction', 'transfer')->select('id')->toBase()))
+            ->where('kind', 'standard');
 
         return [
             'date' => ['required', 'date_format:Y-m-d'],
