@@ -90,7 +90,7 @@
 }
 
 :root {
-    --background: hsl(0 0% 100%);
+    --background: hsl(40 14% 96%);
     --foreground: hsl(0 0% 3.9%);
     --card: hsl(0 0% 100%);
     --card-foreground: hsl(0 0% 3.9%);
@@ -115,15 +115,15 @@
     --chart-4: hsl(43 74% 66%);
     --chart-5: hsl(199 45% 42%);
     --radius: 0.5rem;
-    --sidebar-background: hsl(0 0% 100%);
+    --sidebar-background: hsl(40 14% 96%);
     --sidebar-foreground: hsl(240 5.3% 26.1%);
     --sidebar-primary: hsl(161 94% 30%);
     --sidebar-primary-foreground: hsl(0 0% 100%);
     --sidebar-accent: hsl(152 60% 94%);
     --sidebar-accent-foreground: hsl(161 94% 24%);
-    --sidebar-border: hsl(0 0% 91%);
+    --sidebar-border: hsl(40 8% 89%);
     --sidebar-ring: hsl(161 94% 30%);
-    --sidebar: hsl(0 0% 100%);
+    --sidebar: hsl(40 14% 96%);
 }
 
 .dark {

@@ -17,9 +17,9 @@
     import AppHead from '@/components/AppHead.svelte';
     import FinanceSummary from '@/components/FinanceSummary.svelte';
     import FreshnessIndicator from '@/components/FreshnessIndicator.svelte';
-    import MoneyRow from '@/components/MoneyRow.svelte';
     import { Button } from '@/components/ui/button';
     import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    import { SidebarTrigger } from '@/components/ui/sidebar';
     import {
         Dialog,
         DialogContent,
@@ -47,6 +47,8 @@
         | 'recurring'
         | 'investments';
 
+    type SpendingPoint = { day: number; amount: number };
+
     let {
         availableCards,
         enabledCards,
@@ -59,9 +61,29 @@
                 planned: string;
                 available: string;
                 over_budget: { id: string; name: string; available: string }[];
+                groups: {
+                    direction: 'income' | 'expense';
+                    label: string;
+                    planned: string;
+                    activity: string;
+                    remaining: string;
+                    progress: number;
+                    over_budget: boolean;
+                }[];
             };
             recurring: { count: number };
-            goals: { count: number };
+            goals: {
+                count: number;
+                items: {
+                    id: string;
+                    name: string;
+                    type: 'save_up' | 'pay_down';
+                    linked_to: string | null;
+                    current: string;
+                    target: string;
+                    progress: number;
+                }[];
+            };
             net_worth: {
                 investable: string;
                 total: string;
@@ -74,8 +96,12 @@
             };
             investments: { total: string; count: number };
             spending: {
-                series: { name: string; spent: string; width: number }[];
-                total: string;
+                current_month: string;
+                previous_month: string;
+                current_total: string;
+                previous_total: string;
+                current_series: SpendingPoint[];
+                previous_series: SpendingPoint[];
             };
             transactions: {
                 items: {
@@ -117,7 +143,13 @@
     let saving = $state(false);
     let dragKey = $state<CardKey | null>(null);
 
-    const availableNegative = $derived(cards.budget.available.startsWith('-'));
+    const spendingMaximum = $derived(
+        Math.max(
+            1,
+            ...cards.spending.current_series.map((point) => point.amount),
+            ...cards.spending.previous_series.map((point) => point.amount),
+        ),
+    );
     const greeting = $derived.by(() => {
         const hour = new Date().getHours();
         const salutation = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -126,6 +158,26 @@
         return `${salutation}, ${firstName}!`;
     });
     const budgetMonth = new Intl.DateTimeFormat('en-CA', { month: 'long', year: 'numeric' }).format(new Date());
+    const spendingChartTicks = [1, 5, 9, 13, 17, 21, 25, 31];
+
+    function spendingPath(points: SpendingPoint[]): string {
+        return points
+            .map((point, index) => {
+                const x = 48 + ((point.day - 1) / 30) * 650;
+                const y = 174 - (point.amount / spendingMaximum) * 145;
+
+                return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+            })
+            .join(' ');
+    }
+
+    function formatCents(amount: number): string {
+        return new Intl.NumberFormat('en-CA', {
+            style: 'currency',
+            currency: 'CAD',
+            maximumFractionDigits: 0,
+        }).format(amount / 100);
+    }
 
     function isCardKey(value: string): value is CardKey {
         return Object.hasOwn(cardLabels, value);
@@ -268,9 +320,9 @@
 
 <div class="flex flex-col gap-5 px-6 py-5" data-test="overview">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div class="flex min-w-0 items-center gap-2">
+            <SidebarTrigger class="-ml-2" />
             <h1 class="text-xl font-semibold tracking-tight">{greeting}</h1>
-            <p class="mt-1 text-sm text-muted-foreground">Your money at a glance.</p>
         </div>
         <Button variant="outline" size="sm" onclick={openCustomize} data-test="customize-overview">
             Customize
@@ -285,16 +337,16 @@
         </Card>
     {/if}
 
-    <div class="grid items-start gap-4 lg:grid-cols-2" data-test="overview-grid">
+    <div class="grid items-start gap-5 xl:grid-cols-2" data-test="overview-grid">
         {#each enabledCards as key (key)}
             <div
-                class="flex min-w-0 items-start gap-2 {dragKey === key ? 'opacity-60' : ''}"
+                class="group relative min-w-0 {key === 'goals' ? 'xl:col-span-2' : ''} {dragKey === key ? 'opacity-60' : ''}"
                 data-test="overview-card-{cardSlugs[key]}"
                 data-card-key={key}
             >
                 <button
                     type="button"
-                    class="mt-2 inline-flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/70 select-none hover:bg-accent hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+                    class="absolute top-3 left-1 z-10 inline-flex size-6 cursor-grab touch-none items-center justify-center rounded-md bg-card/80 text-muted-foreground/70 opacity-0 select-none hover:bg-accent hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
                     data-test="overview-card-drag-{cardSlugs[key]}"
                     aria-label="Drag {cardLabels[key]}"
                     draggable="false"
@@ -303,7 +355,7 @@
                 >
                     <GripVertical class="size-4" />
                 </button>
-                <div class="min-w-0 flex-1">
+                <div class="min-w-0">
                     {#if key === 'budget'}
                         <Card class="h-full">
                             <CardHeader class="flex flex-row items-start justify-between gap-3">
@@ -317,34 +369,27 @@
                                     {/snippet}
                                 </Button>
                             </CardHeader>
-                            <CardContent class="space-y-4">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p class="text-sm text-muted-foreground">Planned</p>
-                                        <p class="mt-1 text-2xl font-semibold tabular-nums">{cards.budget.planned}</p>
-                                        <p class="mt-1 text-xs text-muted-foreground">Across budget categories</p>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-muted-foreground">Available</p>
-                                        <p class="mt-1 text-2xl font-semibold tabular-nums {availableNegative ? 'text-destructive' : 'text-emerald-700'}">{cards.budget.available}</p>
-                                        <p class="mt-1 text-xs text-muted-foreground">Including category rollover</p>
-                                    </div>
-                                </div>
-                                <div class="border-t pt-3" data-test="over-budget-categories">
-                                    <div class="flex items-center justify-between gap-3 text-sm">
-                                        <span class="font-medium">Over budget categories</span>
-                                        <span class="tabular-nums">{cards.budget.over_budget.length}</span>
-                                    </div>
-                                    {#if cards.budget.over_budget.length === 0}
-                                        <p class="mt-2 text-sm text-muted-foreground">No categories are over budget this month.</p>
-                                    {:else}
-                                        <div class="mt-1 divide-y">
-                                            {#each cards.budget.over_budget as category (category.id)}
-                                                <MoneyRow label={category.name} amount={category.available} detail="Available" />
-                                            {/each}
+                            <CardContent class="space-y-5">
+                                {#each cards.budget.groups as group (group.direction)}
+                                    <div class="space-y-2" data-test="budget-direction-{group.direction}">
+                                        <div class="flex items-center justify-between gap-3 text-sm">
+                                            <span class="font-medium">{group.label}</span>
+                                            <span class="text-muted-foreground tabular-nums">{group.planned} planned</span>
                                         </div>
-                                    {/if}
-                                </div>
+                                        <div class="h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                                            <div
+                                                class="h-full rounded-full {group.over_budget ? 'bg-destructive' : 'bg-primary'}"
+                                                style="width: {group.progress}%"
+                                            ></div>
+                                        </div>
+                                        <div class="flex items-center justify-between gap-3 text-sm">
+                                            <span class="font-semibold tabular-nums">{group.activity} {group.direction === 'income' ? 'earned' : 'spent'}</span>
+                                            <span class="tabular-nums {group.over_budget ? 'font-semibold text-destructive' : 'text-muted-foreground'}">
+                                                {group.remaining} remaining
+                                            </span>
+                                        </div>
+                                    </div>
+                                {/each}
                             </CardContent>
                         </Card>
                     {:else if key === 'net_worth'}
@@ -387,17 +432,45 @@
                         </Card>
                     {:else if key === 'goals'}
                         <Card class="h-full">
-                            <CardHeader><CardTitle>Goals</CardTitle></CardHeader>
-                            <CardContent class="flex items-end justify-between gap-3">
-                                <div>
-                                    <p class="text-3xl font-semibold tabular-nums">{cards.goals.count}</p>
-                                    <p class="mt-1 text-sm text-muted-foreground">Active goals</p>
-                                </div>
+                            <CardHeader class="flex flex-row items-center justify-between gap-3">
+                                <CardTitle>Goals</CardTitle>
                                 <Button variant="link" class="px-0" asChild>
                                     {#snippet children(props)}
                                         <Link href={toUrl(goals())} class={props.class}>Open Goals</Link>
                                     {/snippet}
                                 </Button>
+                            </CardHeader>
+                            <CardContent class="pt-0">
+                                {#if cards.goals.items.length === 0}
+                                    <p class="text-sm text-muted-foreground">No active goals.</p>
+                                {:else}
+                                    <div class="divide-y">
+                                        {#each cards.goals.items as goal (goal.id)}
+                                            <Link
+                                                href={toUrl(goals())}
+                                                class="block space-y-2 py-3 first:pt-0 last:pb-0"
+                                                data-test="dashboard-goal"
+                                            >
+                                                <div class="flex items-center justify-between gap-4">
+                                                    <span class="min-w-0">
+                                                        <span class="block truncate text-sm font-medium">{goal.name}</span>
+                                                        <span class="mt-0.5 block truncate text-xs text-muted-foreground">
+                                                            {goal.linked_to ?? (goal.type === 'save_up' ? 'Savings category' : 'Liability')}
+                                                        </span>
+                                                    </span>
+                                                    <span class="shrink-0 text-sm font-semibold tabular-nums">
+                                                        {goal.current}{goal.type === 'save_up' ? ` of ${goal.target}` : ''}
+                                                    </span>
+                                                </div>
+                                                {#if goal.type === 'save_up'}
+                                                    <div class="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                                                        <div class="h-full rounded-full bg-primary" style="width: {goal.progress}%"></div>
+                                                    </div>
+                                                {/if}
+                                            </Link>
+                                        {/each}
+                                    </div>
+                                {/if}
                             </CardContent>
                         </Card>
                     {:else if key === 'spending'}
@@ -406,27 +479,50 @@
                                 <CardHeader class="flex flex-row items-center justify-between gap-3">
                                     <div>
                                         <CardTitle>Spending</CardTitle>
-                                        <p class="mt-1 text-sm text-muted-foreground">This month</p>
+                                        <p class="mt-1 text-sm text-muted-foreground">This month vs. last month</p>
                                     </div>
-                                    <span class="text-sm font-medium tabular-nums" data-test="spending-total">{cards.spending.total}</span>
+                                    <span class="text-sm font-medium tabular-nums" data-test="spending-total">{cards.spending.current_total}</span>
                                 </CardHeader>
-                                <CardContent>
-                                    {#if cards.spending.series.length === 0}
-                                        <p class="text-sm text-muted-foreground" data-test="spending-empty">No expenses this month.</p>
-                                    {:else}
-                                        <div class="flex flex-col gap-3" data-test="spending-series" aria-label="Spending by category this month">
-                                            {#each cards.spending.series as category, index (`${category.name}-${index}`)}
-                                                <div class="flex flex-col gap-1" data-test="spending-category">
-                                                    <div class="flex items-baseline justify-between gap-3 text-sm">
-                                                        <span class="min-w-0 truncate">{category.name}</span>
-                                                        <span class="shrink-0 tabular-nums">{category.spent}</span>
-                                                    </div>
-                                                    <div class="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                                                        <div class="h-full rounded-full bg-primary" style="width: {category.width}%"></div>
-                                                    </div>
-                                                </div>
-                                            {/each}
-                                        </div>
+                                <CardContent class="pt-0">
+                                    <div class="flex items-center justify-between text-xs text-muted-foreground">
+                                        {#if spendingMaximum > 1}
+                                            <span>{formatCents(spendingMaximum)}</span>
+                                            <span>{formatCents(Math.round(spendingMaximum / 2))}</span>
+                                        {/if}
+                                        <span class="text-right">$0</span>
+                                    </div>
+                                    <svg
+                                        viewBox="0 0 720 190"
+                                        class="mt-2 h-44 w-full overflow-visible"
+                                        role="img"
+                                        aria-label="Spending comparison for {cards.spending.current_month} and {cards.spending.previous_month}"
+                                        data-test="spending-chart"
+                                    >
+                                        {#each [29, 77, 125, 174] as y (y)}
+                                            <line x1="48" y1={y} x2="698" y2={y} stroke="currentColor" stroke-opacity="0.12" />
+                                        {/each}
+                                        <path d={spendingPath(cards.spending.previous_series)} fill="none" stroke="#969696" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                                        <path d={spendingPath(cards.spending.current_series)} fill="none" stroke="var(--primary)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="mt-1 flex justify-between pl-8 text-muted-foreground">
+                                        {#each spendingChartTicks as day, index (day)}
+                                            <span
+                                                class="shrink-0 whitespace-nowrap text-[10px] sm:text-[11px] {index % 2 === 1 && index !== spendingChartTicks.length - 1 ? 'hidden sm:inline' : ''}"
+                                            >Day {day}</span>
+                                        {/each}
+                                    </div>
+                                    <div class="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm">
+                                        <span class="inline-flex items-center gap-2 text-muted-foreground">
+                                            <span class="size-2.5 rounded-full bg-neutral-400"></span>
+                                            {cards.spending.previous_month} · {cards.spending.previous_total}
+                                        </span>
+                                        <span class="inline-flex items-center gap-2 text-primary">
+                                            <span class="size-2.5 rounded-full bg-primary"></span>
+                                            {cards.spending.current_month} · {cards.spending.current_total}
+                                        </span>
+                                    </div>
+                                    {#if cards.spending.current_total === '$0.00' && cards.spending.previous_total === '$0.00'}
+                                        <p class="mt-3 text-center text-xs text-muted-foreground" data-test="spending-empty">No expense activity yet.</p>
                                     {/if}
                                 </CardContent>
                             </Card>

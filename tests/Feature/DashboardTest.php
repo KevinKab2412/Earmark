@@ -5,11 +5,13 @@ use App\Enums\PositionPurpose;
 use App\Http\Controllers\Household\DashboardController;
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\CategoryBudgetPlan;
 use App\Models\FinancialPosition;
 use App\Models\Goal;
 use App\Models\Holding;
 use App\Models\RecurringSchedule;
 use App\Models\Transaction;
+use App\Models\TransactionSplit;
 use App\Models\User;
 use App\Models\Valuation;
 use Illuminate\Support\Str;
@@ -30,21 +32,23 @@ test('authenticated users can visit the overview', function () {
             ->component('household/Overview')
             ->where('availableCards', [
                 'budget',
-                'net_worth',
-                'goals',
                 'spending',
                 'transactions',
                 'recurring',
+                'net_worth',
                 'investments',
+                'goals',
             ])
             ->has('enabledCards')
             ->has('cards.budget.planned')
             ->has('cards.budget.available')
             ->has('cards.budget.over_budget')
+            ->has('cards.budget.groups', 2)
             ->missing('cards.top_categories')
             ->missing('cards.review_queue')
             ->has('cards.recurring.count')
             ->has('cards.goals.count')
+            ->has('cards.goals.items')
             ->has('cards.net_worth.investable')
             ->has('cards.net_worth.total')
             ->has('cards.net_worth.freshness')
@@ -110,12 +114,98 @@ test('overview totals stay the controller budget, net worth, goals, recurring, a
             ->where('cards.recurring.count', 1)
             ->where('cards.investments.total', '$800.00')
             ->where('cards.investments.count', 1)
-            ->has('cards.spending.series', 1)
-            ->where('cards.spending.series.0.name', 'Groceries')
-            ->where('cards.spending.series.0.spent', '$150.00')
-            ->where('cards.spending.total', '$150.00')
+            ->where('cards.spending.current_total', '$150.00')
+            ->where('cards.spending.previous_total', '$0.00')
+            ->where('cards.spending.current_series.'.(now()->day - 1).'.amount', 15000)
             ->has('cards.transactions.items', 1)
             ->where('cards.transactions.items.0.payee', 'Grocery Store')
+        );
+});
+
+test('overview shows income and expense budget progress with savings and debt goal balances', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $account = Account::factory()->create(['household_id' => $household->id]);
+    $income = $household->categories()->where('name', 'Paychecks')->firstOrFail();
+    $expense = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $savings = Category::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Emergency fund',
+    ]);
+
+    CategoryBudgetPlan::query()
+        ->where('category_id', $income->id)
+        ->whereDate('effective_month', now()->startOfMonth()->toDateString())
+        ->update(['planned_amount' => 50000]);
+    CategoryBudgetPlan::query()
+        ->where('category_id', $expense->id)
+        ->whereDate('effective_month', now()->startOfMonth()->toDateString())
+        ->update(['planned_amount' => 30000]);
+    CategoryBudgetPlan::factory()->create([
+        'category_id' => $savings->id,
+        'effective_month' => now()->startOfMonth()->toDateString(),
+        'planned_amount' => 100000,
+    ]);
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $income->id,
+        'amount' => 20000,
+        'date' => now()->toDateString(),
+        'created_by_user_id' => $user->id,
+    ]);
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $expense->id,
+        'amount' => -8000,
+        'date' => now()->toDateString(),
+        'created_by_user_id' => $user->id,
+    ]);
+    Goal::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Emergency fund',
+        'type' => 'save_up',
+        'target_amount' => 250000,
+        'linked_category_id' => $savings->id,
+        'created_by_user_id' => $user->id,
+    ]);
+    $debt = FinancialPosition::factory()->create([
+        'household_id' => $household->id,
+        'classification' => PositionClassification::Liability,
+    ]);
+    Valuation::factory()->create([
+        'financial_position_id' => $debt->id,
+        'amount' => -600000,
+        'valued_at' => now()->toDateString(),
+        'created_by_user_id' => $user->id,
+    ]);
+    Goal::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Pay off card',
+        'type' => 'pay_down',
+        'target_amount' => 600000,
+        'linked_position_id' => $debt->id,
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cards.budget.groups.0.label', 'Income')
+            ->where('cards.budget.groups.0.planned', '$500.00')
+            ->where('cards.budget.groups.0.activity', '$200.00')
+            ->where('cards.budget.groups.0.remaining', '$300.00')
+            ->where('cards.budget.groups.1.label', 'Expenses')
+            ->where('cards.budget.groups.1.planned', '$1,300.00')
+            ->where('cards.budget.groups.1.activity', '$80.00')
+            ->where('cards.budget.groups.1.remaining', '$1,220.00')
+            ->has('cards.goals.items', 2)
+            ->where('cards.goals.items.0.current', '$1,000.00')
+            ->where('cards.goals.items.0.target', '$2,500.00')
+            ->where('cards.goals.items.0.progress', 40)
+            ->where('cards.goals.items.1.current', '$6,000.00')
+            ->where('cards.goals.items.1.progress', 0)
         );
 });
 
@@ -169,7 +259,9 @@ test('the overview transaction preview lists recent categorized activity and omi
         );
 });
 
-test('the spending series ranks this month\'s expenses and ignores income, transfers, refunds, and earlier months', function () {
+test('the spending chart compares monthly expense totals and excludes income, transfers, refunds, and excluded rows', function () {
+    $this->travelTo(now()->setDay(15));
+
     $user = User::factory()->create();
     $household = $user->household();
     $account = Account::factory()->create(['household_id' => $household->id]);
@@ -196,6 +288,25 @@ test('the spending series ranks this month\'s expenses and ignores income, trans
         'amount' => -150000,
         'date' => now()->toDateString(),
         'created_by_user_id' => $user->id,
+    ]);
+    $splitTransaction = Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => null,
+        'amount' => -40000,
+        'is_split' => true,
+        'date' => now()->toDateString(),
+        'created_by_user_id' => $user->id,
+    ]);
+    TransactionSplit::factory()->create([
+        'transaction_id' => $splitTransaction->id,
+        'category_id' => $groceries->id,
+        'amount' => -30000,
+    ]);
+    TransactionSplit::factory()->create([
+        'transaction_id' => $splitTransaction->id,
+        'category_id' => $rent->id,
+        'amount' => -10000,
     ]);
     Transaction::factory()->create([
         'household_id' => $household->id,
@@ -230,16 +341,23 @@ test('the spending series ranks this month\'s expenses and ignores income, trans
         'date' => now()->subMonth()->startOfMonth()->toDateString(),
         'created_by_user_id' => $user->id,
     ]);
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $rent->id,
+        'amount' => -900000,
+        'date' => now()->toDateString(),
+        'excluded_from_reports' => true,
+        'created_by_user_id' => $user->id,
+    ]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('cards.spending.series', 2)
-            ->where('cards.spending.series.0.name', 'Test Rent')
-            ->where('cards.spending.series.0.spent', '$1,500.00')
-            ->where('cards.spending.series.1.name', 'Groceries')
-            ->where('cards.spending.series.1.spent', '$50.00')
-            ->where('cards.spending.total', '$1,550.00')
+            ->where('cards.spending.current_total', '$1,950.00')
+            ->where('cards.spending.previous_total', '$5,000.00')
+            ->where('cards.spending.current_series.14.amount', 195000)
+            ->where('cards.spending.previous_series.30.amount', 500000)
             ->missing('cards.top_categories')
         );
 });
@@ -250,8 +368,10 @@ test('the spending series is empty when the month has no expenses', function () 
 
     $this->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('cards.spending.series', [])
-            ->where('cards.spending.total', '$0.00')
+            ->where('cards.spending.current_total', '$0.00')
+            ->where('cards.spending.previous_total', '$0.00')
+            ->has('cards.spending.current_series')
+            ->has('cards.spending.previous_series')
             ->missing('cards.top_categories')
         );
 });

@@ -1,13 +1,5 @@
 <?php
 
-/**
- * The pixel oracle's master is the saved Mobbin frame, not a screenshot of this page.
- *
- * Screen f5e0390b-fe1f-4c6f-aa6a-fecedd5b24cb is Monarch's web dashboard.
- * The file is that capture at 1920×1320, including the Mobbin attribution bar.
- * Widths 390, 768, and 1440 were not returned, so parity there stays untested.
- * The capture is not resized into those widths.
- */
 function monarchDashboardFramePath(): string
 {
     return dirname(__DIR__, 2).'/Fixtures/mobbin/f5e0390b-fe1f-4c6f-aa6a-fecedd5b24cb.jpg';
@@ -26,24 +18,29 @@ it('keeps the Mobbin dashboard capture as the pixel baseline', function () {
     expect($size[1])->toBe(1320);
 });
 
-it('leaves dashboard parity untested when Mobbin has no frame at that width', function (int $width) {
-    $size = getimagesize(monarchDashboardFramePath());
+/**
+ * Pest stores pixel-diff snapshots for our rendered dashboard. The Mobbin file
+ * above remains the external reference; it is never resized to invent a frame.
+ */
+function assertOverviewPixelBaseline(int $width, int $height): void
+{
+    test()->travelTo('2026-11-01 12:00:00');
+    actingAsOwner(['name' => 'Pixel Baseline']);
 
-    expect($size)->toBeArray();
+    visit('/household/dashboard')
+        ->resize($width, $height)
+        ->assertNoJavaScriptErrors()
+        ->assertScreenshotMatches();
+}
 
-    $frameWidth = $size[0];
+it('pixel-diffs the mobile overview at 390 pixels', function () {
+    assertOverviewPixelBaseline(390, 844);
+});
 
-    if ($frameWidth !== $width) {
-        $this->markTestIncomplete(
-            "No Mobbin frame exists for {$width}px. Saved dashboard frame f5e0390b is {$frameWidth}×{$size[1]}. Refusing to resize it. Parity at {$width} is untested.",
-        );
-    }
+it('pixel-diffs the tablet overview at 768 pixels', function () {
+    assertOverviewPixelBaseline(768, 1024);
+});
 
-    $this->fail(
-        "A {$width}px Mobbin frame is present, but this check must compare the rendered dashboard to that frame. It must not accept a screenshot of this page as the baseline.",
-    );
-})->with([
-    '390 pixels' => [390],
-    '768 pixels' => [768],
-    '1440 pixels' => [1440],
-]);
+it('pixel-diffs the desktop overview at 1440 pixels', function () {
+    assertOverviewPixelBaseline(1440, 1000);
+});

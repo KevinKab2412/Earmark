@@ -69,16 +69,18 @@ it('shows the overview card set', function () {
     actingAsOwner();
 
     $page = visit('/household/dashboard')
-        ->assertSeeIn('[data-test="overview-card-budget"]', 'Planned')
-        ->assertSeeIn('[data-test="overview-card-budget"]', 'Available')
-        ->assertSeeIn('[data-test="overview-card-budget"]', 'Over budget categories')
+        ->assertSeeIn('[data-test="overview-card-budget"]', 'Income')
+        ->assertSeeIn('[data-test="overview-card-budget"]', 'Expenses')
+        ->assertSeeIn('[data-test="budget-direction-income"]', '$0.00 planned')
+        ->assertSeeIn('[data-test="budget-direction-expense"]', '$0.00 remaining')
         ->assertSeeIn('[data-test="overview-card-net-worth"]', 'Investable assets')
         ->assertSeeIn('[data-test="overview-card-net-worth"]', 'Total net worth')
         ->assertSeeIn('[data-test="overview-card-net-worth"]', 'Add first financial position')
         ->assertDontSeeIn('[data-test="overview-card-net-worth"]', 'Target gap')
-        ->assertSeeIn('[data-test="overview-card-goals"]', 'Active goals')
+        ->assertSeeIn('[data-test="overview-card-goals"]', 'No active goals.')
         ->assertSeeIn('[data-test="overview-card-spending"]', 'Spending')
-        ->assertSeeIn('[data-test="overview-card-spending"]', '$0.00')
+        ->assertSeeIn('[data-test="overview-card-spending"]', 'This month vs. last month')
+        ->assertSeeIn('[data-test="spending-total"]', '$0.00')
         ->assertSeeIn('[data-test="overview-card-transactions"]', 'Most recent')
         ->assertSeeIn('[data-test="overview-card-transactions"]', 'Upload a statement')
         ->assertDontSeeIn('[data-test="overview-card-transactions"]', '$')
@@ -95,12 +97,12 @@ it('shows the overview card set', function () {
 
     foreach ([
         'Budget',
-        'Net worth',
-        'Goals',
         'Spending',
         'Transactions',
         'Recurring',
+        'Net worth',
         'Investments',
+        'Goals',
     ] as $label) {
         $found = strpos($text, $label, $cursor);
 
@@ -114,7 +116,7 @@ it('shows the overview card set', function () {
         ->assertNoJavaScriptErrors();
 });
 
-it('lists overspent categories and opens the plan from overview', function () {
+it('opens the category plan from the overview', function () {
     $this->travelTo('2026-09-07 12:00:00');
 
     $user = actingAsOwner();
@@ -131,8 +133,6 @@ it('lists overspent categories and opens the plan from overview', function () {
     ]);
 
     visit('/household/dashboard')
-        ->assertSee('Groceries')
-        ->assertSee('-$150.00')
         ->click('Open Budget')
         ->assertPathIs('/household/plan')
         ->assertSee('Groceries')
@@ -218,11 +218,11 @@ it('keeps a hidden overview card hidden after refresh', function () {
     expect((string) $page->text('[data-test="overview"]'))->not->toContain('Investments');
     expect($user->household()->fresh()->overview_cards)->toBe([
         'budget',
-        'net_worth',
-        'goals',
         'spending',
         'transactions',
         'recurring',
+        'net_worth',
+        'goals',
     ]);
 });
 
@@ -231,11 +231,11 @@ it('keeps a dragged overview card first after refresh', function () {
     $order = [
         'spending',
         'budget',
-        'net_worth',
-        'goals',
         'transactions',
         'recurring',
+        'net_worth',
         'investments',
+        'goals',
     ];
 
     $page = visit('/household/dashboard')
@@ -248,11 +248,11 @@ it('keeps a dragged overview card first after refresh', function () {
     expectOverviewCardOrder($page, [
         'Spending',
         'Budget',
-        'Net worth',
-        'Goals',
         'Transactions',
         'Recurring',
+        'Net worth',
         'Investments',
+        'Goals',
     ]);
     expect($user->household()->fresh()->overview_cards)->toBe($order);
 });

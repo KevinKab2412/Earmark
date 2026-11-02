@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from '@inertiajs/svelte';
     import type { Snippet } from 'svelte';
     import AppContent from '@/components/AppContent.svelte';
     import AppShell from '@/components/AppShell.svelte';
@@ -21,7 +22,9 @@
 <AppShell variant="sidebar">
     <AppSidebar />
     <AppContent variant="sidebar" class="min-w-0 overflow-x-clip">
-        <AppSidebarHeader {breadcrumbs} {planToolbar} />
+        {#if page.component !== 'household/Overview'}
+            <AppSidebarHeader {breadcrumbs} {planToolbar} />
+        {/if}
         {@render children?.()}
     </AppContent>
     <Toaster />
