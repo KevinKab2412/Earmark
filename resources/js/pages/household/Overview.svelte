@@ -65,6 +65,7 @@
             net_worth: {
                 investable: string;
                 total: string;
+                targetGap: string | null;
                 freshness: {
                     status: 'current' | 'stale' | 'unknown';
                     label: string;
@@ -368,7 +369,12 @@
                                         <p class="mt-2 text-xs text-muted-foreground">Assets minus liabilities, including home</p>
                                     </div>
                                 </div>
-                                <div class="mt-4 flex justify-end border-t pt-3">
+                                <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                                    {#if cards.net_worth.targetGap !== null}
+                                        <p class="text-sm text-muted-foreground">
+                                            Target gap <span class="ml-1 font-medium text-foreground tabular-nums">{cards.net_worth.targetGap}</span>
+                                        </p>
+                                    {/if}
                                     <Button variant="link" class="px-0" asChild>
                                         {#snippet children(props)}
                                             <Link href={toUrl(netWorth())} class={props.class}>

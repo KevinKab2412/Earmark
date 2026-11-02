@@ -61,6 +61,7 @@ it('creates category groups and budgets individual categories by month', functio
         ->click('@plan-next-month')
         ->assertSee('October 2026')
         ->click('@plan-prev-month')
+        ->assertSee('September 2026')
         ->click('@plan-prev-month')
         ->assertSee('August 2026')
         ->click('@plan-today')
