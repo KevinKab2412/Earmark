@@ -109,6 +109,10 @@ test('progress is zero when nothing is linked', function () {
 test('a goal can be created and the index renders progress', function () {
     $user = User::factory()->create();
     $category = $user->household()->categories()->where('name', 'Emergency Fund')->firstOrFail();
+    $category->budgetPlans()
+        ->whereDate('effective_month', now()->startOfMonth()->toDateString())
+        ->firstOrFail()
+        ->update(['planned_amount' => 5000]);
 
     $this->actingAs($user)->post(route('household.goals.store'), [
         'name' => 'Emergency fund', 'type' => 'save_up', 'target_amount' => 500000,
@@ -116,7 +120,11 @@ test('a goal can be created and the index renders progress', function () {
     ])->assertRedirect(route('household.goals.index'))->assertSessionHasNoErrors();
 
     $this->actingAs($user)->get(route('household.goals.index'))
-        ->assertInertia(fn ($page) => $page->component('household/Goals')->has('goals', 1));
+        ->assertInertia(fn ($page) => $page
+            ->component('household/Goals')
+            ->has('goals', 1)
+            ->where('goals.0.progress.current', '$50.00')
+        );
 });
 
 test('goals can be reordered for payoff sequence', function () {

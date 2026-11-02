@@ -39,7 +39,14 @@ class GoalController extends Controller
             ->when($statusFilter === 'archived',
                 fn ($query) => $query->where('status', 'archived'),
                 fn ($query) => $query->whereIn('status', ['active', 'achieved']))
-            ->with(['account:id,name,starting_balance', 'category:id,name', 'paymentCategory:id,name,category_group_id', 'paymentCategory.group:id,direction', 'position:id,name'])
+            ->with([
+                'account:id,name,starting_balance',
+                'category:id,name,category_group_id,kind',
+                'category.group:id,direction',
+                'paymentCategory:id,name,category_group_id',
+                'paymentCategory.group:id,direction',
+                'position:id,name',
+            ])
             ->orderBy('sort_order')->orderBy('created_at')
             ->get()
             ->map(function (Goal $goal): array {
@@ -119,7 +126,7 @@ class GoalController extends Controller
                         ->select('payment_category_id')))
                 ->whereHas('group', fn ($query) => $query->whereIn('direction', ['expense', 'transfer']))
                 ->where('kind', 'standard')
-                ->with('group:id,name')
+                ->with('group:id,name,direction')
                 ->orderBy('name')
                 ->get(['id', 'name', 'category_group_id'])
                 ->map(fn (Category $category): array => ['id' => $category->id, 'name' => $category->name, 'group_name' => $category->group?->name, 'direction' => $category->direction, 'archived' => $category->archived]),

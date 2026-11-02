@@ -38,7 +38,7 @@ it('promotes staged rows into the ledger from the review page', function () {
 });
 
 it('pairs a suggested transfer only after save and unpairs both rows when removed', function () {
-    $user = actingAsOwner();
+    $user = actingAsOwner(['name' => 'Pixel Baseline']);
     $household = $user->household();
     $checking = Account::factory()->create(['household_id' => $household->id, 'name' => 'Chequing']);
     $savings = Account::factory()->create(['household_id' => $household->id, 'name' => 'Savings']);
@@ -47,6 +47,7 @@ it('pairs a suggested transfer only after save and unpairs both rows when remove
         'account_id' => $checking->id,
         'uploaded_by_user_id' => $user->id,
         'source' => 'csv',
+        'original_filename' => 'transfers.csv',
     ]);
     $savingsUpload = StatementUpload::factory()->create([
         'household_id' => $household->id,
@@ -79,6 +80,9 @@ it('pairs a suggested transfer only after save and unpairs both rows when remove
         );
 
     $page = visit('/household/import/'.$checkingUpload->id.'/review')
+        ->resize(1440, 1000)
+        ->assertNoJavaScriptErrors()
+        ->assertScreenshotMatches(false)
         ->assertScript('JSON.parse(document.querySelector("script[data-page]").textContent).props.rows[0].transfer_matches[0]?.payee === "Transfer from chequing"')
         ->assertNoJavaScriptErrors()
         ->click('@confirm-transfer-match')
