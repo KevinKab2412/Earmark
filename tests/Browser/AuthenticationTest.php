@@ -31,7 +31,7 @@ it('registers through a valid invite and lands on overview', function () {
         ->fill('password_confirmation', 'password-secret')
         ->click('@register-user-button')
         ->assertPathIs('/household/dashboard')
-        ->assertSee('Over budget categories');
+        ->assertSee('Open Budget');
 
     $this->assertAuthenticated();
     $this->assertDatabaseHas('users', ['email' => allowlistedEmail()]);
@@ -53,7 +53,7 @@ it('signs the owner in from the login screen', function () {
         ->fill('password', 'password')
         ->click('@login-button')
         ->assertPathIs('/household/dashboard')
-        ->assertSee('Over budget categories');
+        ->assertSee('Open Budget');
 
     $this->assertAuthenticated();
 });

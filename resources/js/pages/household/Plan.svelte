@@ -95,10 +95,15 @@
     let budgetDraft = $state('');
     let applyToFutureMonths = $state(true);
     let budgetErrors = $state<Record<string, string>>({});
+    let budgetEditorPosition = $state({ top: 96, left: 96 });
     let collapsedGroups = $state<string[]>([]);
     let collapsedSections = $state<string[]>([]);
     let shownUnbudgeted = $state<string[]>([]);
     let summaryTab = $state<'summary' | 'income' | 'expenses'>('summary');
+
+    const editingCategory = $derived(
+        groups.flatMap((group) => group.categories).find((category) => category.id === editingCategoryId),
+    );
 
     type BudgetSection = {
         key: 'income' | 'expense' | 'transfer';
@@ -146,8 +151,33 @@
     let groupDirection = $state<'income' | 'expense' | 'transfer'>('expense');
     let groupErrors = $state<Record<string, string>>({});
 
-    function openBudgetEditor(category: Category): void {
-        editingCategoryId = editingCategoryId === category.id ? null : category.id;
+    function openBudgetEditor(category: Category, event: MouseEvent): void {
+        if (editingCategoryId === category.id) {
+            editingCategoryId = null;
+            return;
+        }
+
+        const trigger = event.currentTarget as HTMLElement;
+        const rect = trigger.getBoundingClientRect();
+        const panelWidth = Math.max(1, Math.min(336, window.innerWidth - 32));
+        const panelHeight = category.direction === 'expense' ? 300 : 260;
+        const table = document.querySelector('[data-test="plan-table"]');
+        const tableRect = table?.getBoundingClientRect();
+        const viewportMinLeft = 8;
+        const viewportMaxLeft = Math.max(viewportMinLeft, window.innerWidth - panelWidth - 8);
+        const tableMinLeft = Math.max(viewportMinLeft, (tableRect?.left ?? viewportMinLeft) + 8);
+        const tableMaxLeft = Math.min(viewportMaxLeft, (tableRect?.right ?? window.innerWidth) - panelWidth - 8);
+        const minLeft = tableMaxLeft >= tableMinLeft ? tableMinLeft : viewportMinLeft;
+        const maxLeft = tableMaxLeft >= tableMinLeft ? tableMaxLeft : viewportMaxLeft;
+        const left = Math.min(Math.max(rect.left, minLeft), maxLeft);
+        const below = rect.bottom + 8;
+
+        budgetEditorPosition = {
+            top: below + panelHeight > window.innerHeight ? Math.max(8, rect.top - panelHeight - 8) : below,
+            left,
+        };
+        moveOpen = false;
+        editingCategoryId = category.id;
         budgetDraft = (category.planned_cents / 100).toFixed(2);
         applyToFutureMonths = defaults.apply_to_future_months;
         budgetErrors = {};
@@ -340,14 +370,26 @@
     function openMove(event: MouseEvent): void {
         editingCategoryId = null;
 
-        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+        const trigger = event.currentTarget as HTMLElement;
+        const clickedCategory = budgetCategories.find((category) => category.id === trigger.dataset.categoryId);
+        const destinationCategory = clickedCategory !== undefined && clickedCategory.available_cents < 0 ? clickedCategory : undefined;
+        const sourceCategory = clickedCategory !== undefined && clickedCategory.available_cents > 0
+            ? clickedCategory
+            : budgetCategories.find((category) => category.id !== clickedCategory?.id && category.available_cents > 0);
+        const amount = sourceCategory?.available_cents ?? 0;
+        const rect = trigger.getBoundingClientRect();
         const panelWidth = 320;
         const panelHeight = 420;
         const left = Math.min(Math.max(8, rect.right - panelWidth), window.innerWidth - panelWidth - 8);
         const below = rect.bottom + 8;
         const top = below + panelHeight > window.innerHeight ? Math.max(8, rect.top - panelHeight - 8) : below;
         movePanel = { top, left };
-        moveForm = { from_category_id: '', to_category_id: '', amount: '0', memo: '' };
+        moveForm = {
+            from_category_id: sourceCategory?.id ?? '',
+            to_category_id: destinationCategory?.id ?? '',
+            amount: amount > 0 ? (amount / 100).toFixed(2) : '0',
+            memo: '',
+        };
         moveErrors = {};
         moveOpen = true;
     }
@@ -400,8 +442,9 @@
 
 <svelte:window
     onkeydown={(event) => {
-        if (event.key === 'Escape' && moveOpen) {
+        if (event.key === 'Escape') {
             moveOpen = false;
+            editingCategoryId = null;
         }
     }}
 />
@@ -433,7 +476,7 @@
     </div>
 
     <div class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_29rem]" data-test="plan-columns">
-    <div class="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+    <div class="overflow-hidden rounded-lg border border-neutral-200 bg-white" data-test="plan-table">
         {#if groups.length === 0}
             <div class="p-10 text-center">
                 <h2 class="text-lg font-semibold">Start with a category group</h2>
@@ -516,42 +559,11 @@
                                         <div class="relative col-start-1 row-start-3 sm:col-start-3 sm:row-start-1">
                                             <p class="text-xs text-muted-foreground sm:hidden">Planned</p>
                                             {#if category.budgetable}
-                                                <button type="button" class="h-8 w-full rounded-md border border-neutral-200 bg-white px-2 text-right text-sm tabular-nums hover:border-emerald-600 focus-visible:outline-2 focus-visible:outline-emerald-600" onclick={() => openBudgetEditor(category)} aria-expanded={editingCategoryId === category.id} data-test="edit-category-budget">
+                                                <button type="button" class="h-8 w-full rounded-md border border-neutral-200 bg-white px-2 text-right text-sm tabular-nums hover:border-emerald-600 focus-visible:outline-2 focus-visible:outline-emerald-600" onclick={(event) => openBudgetEditor(category, event)} aria-expanded={editingCategoryId === category.id} data-test="edit-category-budget">
                                                     {category.planned}
                                                 </button>
                                             {:else}
                                                 <span class="block text-right text-sm text-muted-foreground">—</span>
-                                            {/if}
-                                            {#if editingCategoryId === category.id}
-                                                <div class="absolute left-0 top-full z-20 mt-2 w-[min(21rem,calc(100vw-2rem))] rounded-xl border bg-background p-4 shadow-xl">
-                                                    <div class="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <h3 class="font-semibold">Plan {category.name}</h3>
-                                                            <p class="text-xs text-muted-foreground">{monthLabel}</p>
-                                                        </div>
-                                                        <button type="button" class="text-muted-foreground" aria-label="Close budget editor" onclick={() => (editingCategoryId = null)}>×</button>
-                                                    </div>
-                                                    <div class="mt-3 grid gap-2">
-                                                        <Label for={`budget-${category.id}`}>Planned amount</Label>
-                                                        <Input id={`budget-${category.id}`} type="number" min="0" step="0.01" bind:value={budgetDraft} />
-                                                        <InputError message={budgetErrors.amount} />
-                                                    </div>
-                                                    <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
-                                                        <input type="checkbox" class="mt-1 accent-emerald-600" bind:checked={applyToFutureMonths} />
-                                                        <span>Apply this amount to all future months</span>
-                                                    </label>
-                                                    <InputError message={budgetErrors.apply_to_future_months} />
-                                                    {#if category.direction === 'expense'}
-                                                        <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
-                                                            <input type="checkbox" class="mt-1 size-4 accent-emerald-600" checked={category.rollover_enabled} onchange={(event) => setRollover(category, event.currentTarget.checked)} data-test="category-rollover" />
-                                                            <span>Roll a positive or negative balance into next month</span>
-                                                        </label>
-                                                    {/if}
-                                                    <div class="mt-4 flex justify-end gap-2">
-                                                        <Button type="button" size="sm" variant="ghost" onclick={() => (editingCategoryId = null)}>Cancel</Button>
-                                                        <Button type="button" size="sm" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={() => saveBudget(category)}>Save</Button>
-                                                    </div>
-                                                </div>
                                             {/if}
                                         </div>
                                         <div class="col-start-2 row-start-3 text-right sm:col-start-4 sm:row-start-1">
@@ -650,6 +662,44 @@
     </aside>
     </div>
 </div>
+
+{#if editingCategory}
+    <div
+        class="fixed z-50 max-h-[calc(100vh-1rem)] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl"
+        style={`top:${budgetEditorPosition.top}px;left:${budgetEditorPosition.left}px`}
+        role="dialog"
+        aria-label={`Plan ${editingCategory.name}`}
+        data-test="budget-editor"
+    >
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <h3 class="font-semibold">Plan {editingCategory.name}</h3>
+                <p class="text-xs text-muted-foreground">{monthLabel}</p>
+            </div>
+            <button type="button" class="text-muted-foreground" aria-label="Close budget editor" onclick={() => (editingCategoryId = null)}>×</button>
+        </div>
+        <div class="mt-3 grid gap-2">
+            <Label for={`budget-${editingCategory.id}`}>Planned amount</Label>
+            <Input id={`budget-${editingCategory.id}`} type="number" min="0" step="0.01" bind:value={budgetDraft} />
+            <InputError message={budgetErrors.amount} />
+        </div>
+        <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-1 accent-emerald-600" bind:checked={applyToFutureMonths} />
+            <span>Apply this amount to all future months</span>
+        </label>
+        <InputError message={budgetErrors.apply_to_future_months} />
+        {#if editingCategory.direction === 'expense'}
+            <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+                <input type="checkbox" class="mt-1 size-4 accent-emerald-600" checked={editingCategory.rollover_enabled} onchange={(event) => setRollover(editingCategory, event.currentTarget.checked)} data-test="category-rollover" />
+                <span>Roll a positive or negative balance into next month</span>
+            </label>
+        {/if}
+        <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" onclick={() => (editingCategoryId = null)}>Cancel</Button>
+            <Button type="button" size="sm" class="bg-emerald-600 text-white hover:bg-emerald-700" onclick={() => saveBudget(editingCategory)}>Save</Button>
+        </div>
+    </div>
+{/if}
 
 {#if moveOpen}
     <div class="fixed z-40 w-80 rounded-xl border bg-background p-4 shadow-xl" style="top: {movePanel.top}px; left: {movePanel.left}px" role="dialog" aria-labelledby="move-budget-title" data-test="move-budget">

@@ -45,6 +45,43 @@ test('a user can move planned funds from one category to another', function () {
         ->and($budget->availableForMonth($source, now()->year, now()->month) + $budget->availableForMonth($destination, now()->year, now()->month))->toBe(10000);
 });
 
+test('a user can move funds between income and expense categories', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $incomeGroup = $household->categoryGroups()->where('direction', 'income')->firstOrFail();
+    $income = Category::factory()->create([
+        'household_id' => $household->id,
+        'name' => 'Paycheck',
+        'category_group_id' => $incomeGroup->id,
+        'starting_month' => now()->startOfMonth()->toDateString(),
+    ]);
+    $expense = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    CategoryBudgetPlan::query()->create([
+        'category_id' => $income->id,
+        'effective_month' => now()->startOfMonth()->toDateString(),
+        'planned_amount' => 10000,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('household.plan.move'), [
+            'from_category_id' => $income->id,
+            'to_category_id' => $expense->id,
+            'amount' => '50.00',
+            'year' => now()->year,
+            'month' => now()->month,
+        ])
+        ->assertRedirect(route('household.plan.index', ['year' => now()->year, 'month' => now()->month]))
+        ->assertSessionHasNoErrors();
+
+    $budget = app(CategoryBudgetService::class);
+    $move = CategoryBudgetMove::query()->where('household_id', $household->id)->sole();
+
+    expect($move->from_category_id)->toBe($income->id)
+        ->and($move->to_category_id)->toBe($expense->id)
+        ->and($budget->availableForMonth($income, now()->year, now()->month))->toBe(5000)
+        ->and($budget->availableForMonth($expense, now()->year, now()->month))->toBe(5000);
+});
+
 test('moving 50.00 from groceries to restaurants changes available and leaves both plans', function () {
     $user = User::factory()->create();
     $household = $user->household();

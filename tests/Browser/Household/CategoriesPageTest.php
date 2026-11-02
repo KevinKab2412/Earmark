@@ -66,3 +66,44 @@ it('creates a category group and category from category settings', function () {
         'icon' => '🐾',
     ]);
 });
+
+it('pixel-diffs the transfers category page at the reference viewport', function () {
+    $this->travelTo('2026-11-01 12:00:00');
+    actingAsOwner(['name' => 'Pixel Baseline']);
+
+    visit('/household/categories')
+        ->resize(1908, 780)
+        ->click('@category-tab-transfer')
+        ->assertSee('Transfers')
+        ->assertSee('Credit Card Payment')
+        ->assertSee('Balance Adjustments')
+        ->assertNoJavaScriptErrors()
+        ->assertScreenshotMatches(false);
+});
+
+it('pixel-diffs the create group dialog from the transfers section', function () {
+    $this->travelTo('2026-11-01 12:00:00');
+    actingAsOwner(['name' => 'Pixel Baseline']);
+
+    visit('/household/categories')
+        ->resize(1908, 780)
+        ->click('@category-tab-transfer')
+        ->click('@create-category-group')
+        ->assertSee('This group will contain transfer categories.')
+        ->assertNoJavaScriptErrors()
+        ->assertScreenshotMatches(false);
+});
+
+it('pixel-diffs the create category dialog from the transfers group', function () {
+    $this->travelTo('2026-11-01 12:00:00');
+    $user = actingAsOwner(['name' => 'Pixel Baseline']);
+    $group = $user->household()->categoryGroups()->where('direction', 'transfer')->firstOrFail();
+
+    visit('/household/categories')
+        ->resize(1908, 780)
+        ->click('@category-tab-transfer')
+        ->click('@create-category-in-'.$group->id)
+        ->assertSee('Categories are the units used for planning and transaction activity.')
+        ->assertNoJavaScriptErrors()
+        ->assertScreenshotMatches(false);
+});
