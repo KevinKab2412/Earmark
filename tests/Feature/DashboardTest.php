@@ -51,7 +51,7 @@ test('authenticated users can visit the overview', function () {
             ->has('cards.investments.total')
             ->missing('cards.scenarios')
             ->has('cards.spending')
-            ->missing('cards.transactions')
+            ->has('cards.transactions.items', 0)
         );
 });
 
@@ -64,6 +64,7 @@ test('overview totals stay the controller budget, net worth, goals, recurring, a
         'household_id' => $household->id,
         'account_id' => $account->id,
         'category_id' => $groceries->id,
+        'payee' => 'Grocery Store',
         'amount' => -15000,
         'date' => now()->toDateString(),
         'created_by_user_id' => $user->id,
@@ -113,7 +114,58 @@ test('overview totals stay the controller budget, net worth, goals, recurring, a
             ->where('cards.spending.series.0.name', 'Groceries')
             ->where('cards.spending.series.0.spent', '$150.00')
             ->where('cards.spending.total', '$150.00')
-            ->missing('cards.transactions')
+            ->has('cards.transactions.items', 1)
+            ->where('cards.transactions.items.0.payee', 'Grocery Store')
+        );
+});
+
+test('the overview transaction preview lists recent categorized activity and omits paired transfers', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $account = Account::factory()->create(['household_id' => $household->id]);
+    $groceries = $household->categories()->where('name', 'Groceries')->firstOrFail();
+    $transferCategory = $household->categories()->where('name', 'Transfer')->firstOrFail();
+
+    $older = Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $groceries->id,
+        'date' => now()->subDay()->toDateString(),
+        'payee' => 'Yesterday market',
+        'amount' => -2500,
+        'created_by_user_id' => $user->id,
+    ]);
+    $newer = Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $groceries->id,
+        'date' => now()->toDateString(),
+        'payee' => 'Today market',
+        'amount' => -4200,
+        'created_by_user_id' => $user->id,
+    ]);
+    Transaction::factory()->create([
+        'household_id' => $household->id,
+        'account_id' => $account->id,
+        'category_id' => $transferCategory->id,
+        'date' => now()->toDateString(),
+        'payee' => 'Card payment',
+        'amount' => -5000,
+        'transfer_pair_id' => (string) Str::ulid(),
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('cards.transactions.items', 2)
+            ->where('cards.transactions.items.0.id', $newer->id)
+            ->where('cards.transactions.items.0.payee', 'Today market')
+            ->where('cards.transactions.items.0.category', 'Groceries')
+            ->where('cards.transactions.items.0.account', $account->name)
+            ->where('cards.transactions.items.0.amount', '-$42.00')
+            ->where('cards.transactions.items.1.id', $older->id)
+            ->where('cards.transactions.items.1.date', now()->subDay()->format('M j'))
         );
 });
 

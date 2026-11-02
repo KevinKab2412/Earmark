@@ -9,8 +9,10 @@ use App\Models\Category;
 use App\Models\Goal;
 use App\Models\Holding;
 use App\Models\RecurringSchedule;
+use App\Models\Transaction;
 use App\Services\CategoryBudgetService;
 use App\Services\NetWorth\SnapshotService;
+use App\Services\Transaction\TransactionRegisterService;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ class DashboardController extends Controller
     public function __construct(
         private CategoryBudgetService $budget,
         private SnapshotService $snapshot,
+        private TransactionRegisterService $transactionRegister,
     ) {}
 
     public function show(Request $request): Response
@@ -56,6 +59,10 @@ class DashboardController extends Controller
 
         $snapshot = $this->snapshot->forHousehold($household);
         $plan = $household->plans()->latest()->first();
+        $recentTransactions = $this->transactionRegister
+            ->query($household, [])
+            ->limit(5)
+            ->get();
 
         return Inertia::render('household/Overview', [
             'availableCards' => self::CARDS,
@@ -84,6 +91,20 @@ class DashboardController extends Controller
                     'count' => Holding::query()->where('household_id', $household->id)->count(),
                 ],
                 'spending' => $this->spendingCard($budgetRows),
+                'transactions' => [
+                    'items' => $recentTransactions->map(fn (Transaction $transaction): array => [
+                        'id' => $transaction->id,
+                        'date' => $transaction->date->format('M j'),
+                        'payee' => $transaction->payee,
+                        'account' => $transaction->account->name,
+                        'category' => $transaction->is_split
+                            ? __('Split transaction')
+                            : ($transaction->category?->name ?? __('Uncategorized')),
+                        'category_icon' => $transaction->category?->icon,
+                        'amount' => Money::format($transaction->amount),
+                        'is_income' => $transaction->amount > 0,
+                    ])->values()->all(),
+                ],
             ],
         ]);
     }

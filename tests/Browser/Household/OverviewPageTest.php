@@ -78,8 +78,9 @@ it('shows the overview card set', function () {
         ->assertDontSeeIn('[data-test="overview-card-net-worth"]', 'Target gap')
         ->assertSeeIn('[data-test="overview-card-goals"]', 'Active goals')
         ->assertSeeIn('[data-test="overview-card-spending"]', 'Spending')
-        ->assertDontSeeIn('[data-test="overview-card-spending"]', '$')
-        ->assertSeeIn('[data-test="overview-card-transactions"]', 'Open Transactions')
+        ->assertSeeIn('[data-test="overview-card-spending"]', '$0.00')
+        ->assertSeeIn('[data-test="overview-card-transactions"]', 'Most recent')
+        ->assertSeeIn('[data-test="overview-card-transactions"]', 'Upload a statement')
         ->assertDontSeeIn('[data-test="overview-card-transactions"]', '$')
         ->assertSeeIn('[data-test="overview-card-recurring"]', 'Confirmed schedules')
         ->assertSeeIn('[data-test="overview-card-investments"]', 'Open Holdings')
@@ -108,7 +109,7 @@ it('shows the overview card set', function () {
         $cursor = $found + strlen($label);
     }
 
-    $page->click('Open Transactions')
+    $page->click('View all')
         ->assertPathIs('/household/transactions')
         ->assertNoJavaScriptErrors();
 });
