@@ -32,10 +32,13 @@ class GoalController extends Controller
     public function index(Request $request): Response
     {
         $household = $this->household($request);
+        $statusFilter = $request->query('status') === 'archived' ? 'archived' : 'active';
 
         $goals = Goal::query()
             ->where('household_id', $household->id)
-            ->whereIn('status', ['active', 'achieved'])
+            ->when($statusFilter === 'archived',
+                fn ($query) => $query->where('status', 'archived'),
+                fn ($query) => $query->whereIn('status', ['active', 'achieved']))
             ->with(['account:id,name,starting_balance', 'category:id,name', 'paymentCategory:id,name,category_group_id', 'paymentCategory.group:id,direction', 'position:id,name'])
             ->orderBy('sort_order')->orderBy('created_at')
             ->get()
@@ -92,12 +95,54 @@ class GoalController extends Controller
 
         return Inertia::render('household/Goals', [
             'goals' => $goals,
+            'statusFilter' => $statusFilter,
             'types' => Goal::TYPES,
-            'categories' => $household->categories()->where('archived', false)->whereHas('group', fn ($query) => $query->where('direction', 'expense'))->where('kind', 'standard')->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
-            'paymentCategories' => $household->categories()->where('archived', false)->whereHas('group', fn ($query) => $query->whereIn('direction', ['expense', 'transfer']))->where('kind', 'standard')->with('group:id,direction')->orderBy('name')->get(['id', 'name', 'category_group_id']),
-            'accounts' => $household->accounts()->where('archived', false)->whereIn('type', ['credit_card', 'mortgage', 'loan'])->orderBy('name')->get(['id', 'name']),
-            'positions' => $household->financialPositions()->where('archived', false)->where('classification', 'liability')->orderBy('name')->get(['id', 'name']),
-            'defaults' => ['target_date' => now()->addYear()->toDateString()],
+            'categories' => $household->categories()
+                ->where(fn ($query) => $query
+                    ->where('archived', false)
+                    ->orWhereIn('id', Goal::query()
+                        ->where('household_id', $household->id)
+                        ->whereNotNull('linked_category_id')
+                        ->select('linked_category_id')))
+                ->whereHas('group', fn ($query) => $query->where('direction', 'expense'))
+                ->where('kind', 'standard')
+                ->with('group:id,name')
+                ->orderBy('name')
+                ->get(['id', 'name', 'category_group_id'])
+                ->map(fn (Category $category): array => ['id' => $category->id, 'name' => $category->name, 'group_name' => $category->group?->name, 'archived' => $category->archived]),
+            'paymentCategories' => $household->categories()
+                ->where(fn ($query) => $query
+                    ->where('archived', false)
+                    ->orWhereIn('id', Goal::query()
+                        ->where('household_id', $household->id)
+                        ->whereNotNull('payment_category_id')
+                        ->select('payment_category_id')))
+                ->whereHas('group', fn ($query) => $query->whereIn('direction', ['expense', 'transfer']))
+                ->where('kind', 'standard')
+                ->with('group:id,name')
+                ->orderBy('name')
+                ->get(['id', 'name', 'category_group_id'])
+                ->map(fn (Category $category): array => ['id' => $category->id, 'name' => $category->name, 'group_name' => $category->group?->name, 'direction' => $category->direction, 'archived' => $category->archived]),
+            'accounts' => $household->accounts()
+                ->where(fn ($query) => $query
+                    ->where('archived', false)
+                    ->orWhereIn('id', Goal::query()
+                        ->where('household_id', $household->id)
+                        ->whereNotNull('linked_account_id')
+                        ->select('linked_account_id')))
+                ->whereIn('type', ['credit_card', 'mortgage', 'loan'])
+                ->orderBy('name')
+                ->get(['id', 'name', 'archived']),
+            'positions' => $household->financialPositions()
+                ->where(fn ($query) => $query
+                    ->where('archived', false)
+                    ->orWhereIn('id', Goal::query()
+                        ->where('household_id', $household->id)
+                        ->whereNotNull('linked_position_id')
+                        ->select('linked_position_id')))
+                ->where('classification', 'liability')
+                ->orderBy('name')
+                ->get(['id', 'name', 'archived']),
         ]);
     }
 

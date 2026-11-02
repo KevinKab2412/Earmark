@@ -71,6 +71,10 @@ class UpdateGoalRequest extends FormRequest
                 $validator->errors()->add('linked_category_id', __('Savings goals track a budget category.'));
             }
 
+            if ($type === 'save_up' && ! $validator->errors()->has('target_amount') && $this->integer('target_amount') <= 0) {
+                $validator->errors()->add('target_amount', __('Enter a target amount greater than zero.'));
+            }
+
             $status = $this->input('status', 'active');
             $goal = $this->route('goal');
             $exceptGoalId = $goal instanceof Goal ? $goal->id : null;

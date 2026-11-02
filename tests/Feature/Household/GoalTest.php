@@ -227,6 +227,50 @@ test('the database rejects a second active savings goal on the same category', f
     expect(Goal::query()->where('linked_category_id', $category->id)->count())->toBe(1);
 });
 
+test('a savings goal needs a positive target amount', function () {
+    $user = User::factory()->create();
+    $household = $user->household();
+    $category = $household->categories()->where('name', 'Vacation')->firstOrFail();
+
+    $this->actingAs($user)->from(route('household.goals.index'))->post(route('household.goals.store'), [
+        'name' => 'Blank vacation goal',
+        'type' => 'save_up',
+        'target_amount' => 0,
+        'linked_category_id' => $category->id,
+    ])->assertSessionHasErrors(['target_amount' => 'Enter a target amount greater than zero.']);
+
+    expect(Goal::query()->where('household_id', $household->id)->count())->toBe(0);
+});
+
+test('archived goals appear only in the archived view', function () {
+    $user = User::factory()->create();
+    $householdId = $user->household()->id;
+    $activeGoal = Goal::factory()->create([
+        'household_id' => $householdId,
+        'name' => 'Current trip',
+        'status' => 'active',
+        'created_by_user_id' => $user->id,
+    ]);
+    Goal::factory()->create([
+        'household_id' => $householdId,
+        'name' => 'Past trip',
+        'status' => 'archived',
+        'created_by_user_id' => $user->id,
+    ]);
+
+    $this->actingAs($user)->get(route('household.goals.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('statusFilter', 'active')
+            ->has('goals', 1)
+            ->where('goals.0.name', $activeGoal->name));
+
+    $this->actingAs($user)->get(route('household.goals.index', ['status' => 'archived']))
+        ->assertInertia(fn ($page) => $page
+            ->where('statusFilter', 'archived')
+            ->has('goals', 1)
+            ->where('goals.0.name', 'Past trip'));
+});
+
 test('updating a goal onto a category that already has an active savings goal is rejected', function () {
     $user = User::factory()->create();
     $household = $user->household();
