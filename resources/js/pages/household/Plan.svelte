@@ -13,6 +13,7 @@
 
 <script lang="ts">
     import { Link, router, setLayoutProps } from '@inertiajs/svelte';
+    import ChevronDown from '@lucide/svelte/icons/chevron-down';
     import PlanController from '@/actions/App/Http/Controllers/Household/PlanController';
     import AppHead from '@/components/AppHead.svelte';
     import InputError from '@/components/InputError.svelte';
@@ -129,10 +130,13 @@
         ] satisfies BudgetSection[]).filter((section) => section.groups.length > 0);
     });
 
+    type MoveCategoryField = 'from_category_id' | 'to_category_id';
+
     let moveOpen = $state(false);
     let moveForm = $state({ from_category_id: '', to_category_id: '', amount: '0', memo: '' });
     let moveErrors = $state<Record<string, string>>({});
-    let movePanel = $state({ top: 96, left: 96 });
+    let movePicker = $state<MoveCategoryField | null>(null);
+    let moveMemoOpen = $state(false);
 
     const pace = $derived(paceMarkerPercent());
     const moveReady = $derived(
@@ -219,6 +223,8 @@
                 onSuccess: () => {
                     moveOpen = false;
                     moveForm = { from_category_id: '', to_category_id: '', amount: '0', memo: '' };
+                    movePicker = null;
+                    moveMemoOpen = false;
                 },
                 onError: (errors) => (moveErrors = errors as Record<string, string>),
             },
@@ -367,6 +373,19 @@
         return selected.available_cents < 0 ? 'text-red-600' : 'text-emerald-700';
     }
 
+    function selectedMoveCategory(field: MoveCategoryField): Category | undefined {
+        return budgetCategories.find((category) => category.id === moveForm[field]);
+    }
+
+    function toggleMovePicker(field: MoveCategoryField): void {
+        movePicker = movePicker === field ? null : field;
+    }
+
+    function chooseMoveCategory(field: MoveCategoryField, categoryId: string): void {
+        moveForm = { ...moveForm, [field]: categoryId };
+        movePicker = null;
+    }
+
     function openMove(event: MouseEvent): void {
         editingCategoryId = null;
 
@@ -377,20 +396,15 @@
             ? clickedCategory
             : budgetCategories.find((category) => category.id !== clickedCategory?.id && category.available_cents > 0);
         const amount = sourceCategory?.available_cents ?? 0;
-        const rect = trigger.getBoundingClientRect();
-        const panelWidth = 320;
-        const panelHeight = 420;
-        const left = Math.min(Math.max(8, rect.right - panelWidth), window.innerWidth - panelWidth - 8);
-        const below = rect.bottom + 8;
-        const top = below + panelHeight > window.innerHeight ? Math.max(8, rect.top - panelHeight - 8) : below;
-        movePanel = { top, left };
         moveForm = {
             from_category_id: sourceCategory?.id ?? '',
             to_category_id: destinationCategory?.id ?? '',
-            amount: amount > 0 ? (amount / 100).toFixed(2) : '0',
+            amount: amount > 0 ? String(amount / 100) : '0',
             memo: '',
         };
         moveErrors = {};
+        movePicker = null;
+        moveMemoOpen = false;
         moveOpen = true;
     }
 
@@ -702,57 +716,103 @@
 {/if}
 
 {#if moveOpen}
-    <div class="fixed z-40 w-80 rounded-xl border bg-background p-4 shadow-xl" style="top: {movePanel.top}px; left: {movePanel.left}px" role="dialog" aria-labelledby="move-budget-title" data-test="move-budget">
-        <div class="flex items-center justify-between gap-3">
-            <h2 id="move-budget-title" class="text-base font-semibold">Move Budget</h2>
-            <button type="button" class="text-muted-foreground" aria-label="Close move budget" onclick={() => (moveOpen = false)}>×</button>
+    <div
+        class="fixed inset-x-0 bottom-0 z-40 flex h-auto min-h-[min(560px,calc(100dvh-16px))] max-h-[calc(100dvh-16px)] w-full flex-col overflow-y-auto rounded-t-[24px] border bg-background px-6 pt-6 pb-8 shadow-2xl md:inset-y-6 md:right-[56px] md:left-auto md:h-[758px] md:min-h-[600px] md:max-h-[calc(100vh-48px)] md:w-[calc(100vw-48px)] md:max-w-[610px] md:rounded-[20px] md:px-8 md:pt-7 md:pb-8"
+        role="dialog"
+        tabindex="-1"
+        aria-modal="false"
+        aria-labelledby="move-budget-title"
+        data-test="move-budget"
+    >
+        <div class="flex items-center justify-between border-b pb-5">
+            <h2 id="move-budget-title" class="text-2xl font-semibold md:text-[30px]">Move Budget</h2>
+            <button type="button" class="rounded-full p-2 text-muted-foreground hover:bg-muted" aria-label="Close move budget" onclick={() => (moveOpen = false)}>×</button>
         </div>
-        <form class="mt-4 space-y-3" onsubmit={(event) => { event.preventDefault(); if (moveReady) moveFunds(); }}>
+        <form class="flex min-h-0 flex-1 flex-col pt-7 md:pt-9" onsubmit={(event) => { event.preventDefault(); if (moveReady) moveFunds(); }}>
             <input type="hidden" name="year" value={year} />
             <input type="hidden" name="month" value={month} />
-            <div class="grid gap-1.5">
-                <Label for="move-from">From</Label>
-                <select id="move-from" class="{selectClass} {balanceClass(moveForm.from_category_id)}" bind:value={moveForm.from_category_id}>
-                    {@render budgetCategoryOptions()}
-                </select>
-                <InputError message={moveErrors.from_category_id} />
+            <div class="space-y-7 md:space-y-8">
+                {@render moveCategoryPicker('from_category_id', 'From')}
+                {@render moveCategoryPicker('to_category_id', 'To')}
+                <div class="grid gap-4">
+                    <Label for="move-amount" class="text-lg font-semibold md:text-[22px]">Amount</Label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute top-1/2 left-6 -translate-y-1/2 text-2xl">$</span>
+                        <Input id="move-amount" type="number" min="0" step="0.01" bind:value={moveForm.amount} class="h-[72px] rounded-[16px] border-neutral-300 pl-12 text-2xl shadow-none" />
+                    </div>
+                    <InputError message={moveErrors.amount} />
+                </div>
             </div>
-            <div class="grid gap-1.5">
-                <Label for="move-to">To</Label>
-                <select id="move-to" class="{selectClass} {balanceClass(moveForm.to_category_id)}" bind:value={moveForm.to_category_id}>
-                    {@render budgetCategoryOptions()}
-                </select>
-                <InputError message={moveErrors.to_category_id} />
-            </div>
-            <div class="grid gap-1.5">
-                <Label for="move-amount">Amount</Label>
-                <Input id="move-amount" type="number" min="0" step="0.01" bind:value={moveForm.amount} />
-                <InputError message={moveErrors.amount} />
-            </div>
-            <div class="grid gap-1.5">
-                <Label for="move-memo">Memo</Label>
-                <Input id="move-memo" bind:value={moveForm.memo} />
-                <InputError message={moveErrors.memo} />
-            </div>
-            <div class="flex justify-end pt-1">
-                <Button type="submit" class="bg-emerald-600 text-white hover:bg-emerald-700" disabled={!moveReady} data-test="submit-move-money">Save</Button>
+            <div class="mt-auto flex flex-col gap-3 pt-7 md:pt-12">
+                {#if moveMemoOpen}
+                    <div class="grid gap-2">
+                        <Label for="move-memo">Memo</Label>
+                        <Input id="move-memo" bind:value={moveForm.memo} />
+                        <InputError message={moveErrors.memo} />
+                    </div>
+                {:else}
+                    <button type="button" class="self-start text-sm font-medium text-muted-foreground underline-offset-4 hover:underline" onclick={() => (moveMemoOpen = true)} data-test="add-move-memo">Add a note</button>
+                {/if}
+                <div class="flex justify-end">
+                    <Button type="submit" class="h-14 rounded-xl bg-emerald-600 px-8 text-lg font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 md:h-[74px] md:px-9 md:text-2xl" disabled={!moveReady} data-test="submit-move-money">Save</Button>
+                </div>
             </div>
         </form>
     </div>
 {/if}
 
-{#snippet budgetCategoryOptions()}
-    <option value="">Choose a category</option>
-    {#each groups as group (group.id)}
-        {@const choices = group.categories.filter((category) => category.budgetable)}
-        {#if choices.length > 0}
-            <optgroup label={group.name}>
-                {#each choices as category (category.id)}
-                    <option value={category.id}>{category.icon ? `${category.icon} ` : ''}{category.name} · {formatCents(category.available_cents)} left</option>
-                {/each}
-            </optgroup>
-        {/if}
-    {/each}
+{#snippet moveCategoryPicker(field: MoveCategoryField, fieldLabel: string)}
+    {@const fieldKey = field === 'from_category_id' ? 'from' : 'to'}
+    {@const selectedCategory = selectedMoveCategory(field)}
+    <div class="grid gap-4">
+        <Label for={`move-${fieldKey}-picker`} class="text-lg font-semibold md:text-[22px]">{fieldLabel}</Label>
+        <div class="relative">
+            <button
+                id={`move-${fieldKey}-picker`}
+                type="button"
+                class="flex h-[74px] w-full items-center gap-4 rounded-[16px] border border-neutral-300 bg-background px-5 text-left shadow-none hover:bg-muted/30 md:px-6"
+                aria-haspopup="listbox"
+                aria-expanded={movePicker === field}
+                aria-controls={`move-${fieldKey}-options`}
+                data-test={`move-${fieldKey}-picker`}
+                onclick={() => toggleMovePicker(field)}
+            >
+                <span class="grid size-9 shrink-0 place-items-center text-[26px]" aria-hidden="true">{selectedCategory?.icon ?? ''}</span>
+                <span class="min-w-0 flex-1 truncate text-lg font-medium md:text-2xl">{selectedCategory?.name ?? 'Choose a category'}</span>
+                {#if selectedCategory}
+                    <span class="shrink-0 text-sm font-medium tabular-nums md:text-xl {balanceClass(selectedCategory.id)}">{formatCents(selectedCategory.available_cents)} left</span>
+                {/if}
+                <ChevronDown class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </button>
+            {#if movePicker === field}
+                <div id={`move-${fieldKey}-options`} class="absolute top-[calc(100%+8px)] right-0 left-0 z-10 max-h-72 overflow-y-auto rounded-xl border bg-background p-2 shadow-xl" role="listbox" aria-label={`${fieldLabel} categories`}>
+                    {#each groups as group (group.id)}
+                        {@const choices = group.categories.filter((category) => category.budgetable)}
+                        {#if choices.length > 0}
+                            <div role="group" aria-label={group.name}>
+                                <p class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</p>
+                                {#each choices as category (category.id)}
+                                    <button
+                                        type="button"
+                                        role="option"
+                                        aria-selected={moveForm[field] === category.id}
+                                        class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left hover:bg-muted"
+                                        data-test={`move-${fieldKey}-option-${category.id}`}
+                                        onclick={() => chooseMoveCategory(field, category.id)}
+                                    >
+                                        <span class="grid size-8 shrink-0 place-items-center text-xl" aria-hidden="true">{category.icon ?? ''}</span>
+                                        <span class="min-w-0 flex-1 truncate font-medium">{category.name}</span>
+                                        <span class="shrink-0 text-sm tabular-nums {balanceClass(category.id)}">{formatCents(category.available_cents)} left</span>
+                                    </button>
+                                {/each}
+                            </div>
+                        {/if}
+                    {/each}
+                </div>
+            {/if}
+        </div>
+        <InputError message={moveErrors[field]} />
+    </div>
 {/snippet}
 
 <Dialog bind:open={categoryOpen}>
